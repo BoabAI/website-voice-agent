@@ -12,7 +12,7 @@ The **Instant Website Voice Agent Demo** is a platform designed to allow users t
 - **Workflow Orchestration & Backend**: [N8N](https://n8n.io/)
 - **Voice AI Engine**: [Vapi AI](https://vapi.ai/)
 - **Knowledge Base / Vector Database**: (Supabase Postgres Vector)
-- **LLM**: (To be defined, e.g., OpenAI GPT-4o, Anthropic Claude 3.5 Sonnet)
+- **LLM**: OpenRouter (Preferred for accessing models like OpenAI GPT-4o, Anthropic Claude 3.5 Sonnet)
 
 ## 4. Core Features
 
