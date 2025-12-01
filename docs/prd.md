@@ -6,11 +6,11 @@ The **Instant Website Voice Agent Demo** is a platform designed to allow users t
 ## 2. Objectives
 - **Instant Value Demonstration**: Allow users to experience the product's capabilities within minutes without friction (no initial sign-up).
 - **High-Quality Ingestion**: Accurately crawl, clean, and structure website data to ensure high-fidelity answers.
-- **Natural Voice Interaction**: Leverage Vapi AI to provide human-like speech, low-latency responses, and smooth turn-taking.
+- **Natural Voice Interaction**: Leverage OpenAI Realtime API or Gemini Live to provide human-like speech, low-latency responses, and smooth turn-taking.
 
 ## 3. Technology Stack
 - **Workflow Orchestration & Backend**: [N8N](https://n8n.io/)
-- **Voice AI Engine**: [Vapi AI](https://vapi.ai/)
+- **Voice AI Engine**: [OpenAI Realtime API](https://platform.openai.com/docs/guides/realtime) or [Gemini Live](https://ai.google.dev/gemini-api/docs/live) (chosen over Vapi for cost efficiency in web demos - ~80% cost reduction)
 - **Knowledge Base / Vector Database**: (Supabase Postgres Vector)
 - **LLM**: OpenRouter (Preferred for accessing models like OpenAI GPT-4o, Anthropic Claude 3.5 Sonnet)
 
@@ -29,11 +29,11 @@ The **Instant Website Voice Agent Demo** is a platform designed to allow users t
 - **Updates**: Support re-crawling to update the Knowledge Base when the source site changes.
 
 ### 4.2. AI Chat & Voice Agent
-**Owner**: Vapi AI (Voice) & N8N (RAG Pipeline)
+**Owner**: OpenAI Realtime API / Gemini Live (Voice) & N8N (RAG Pipeline)
 - **RAG Pipeline**:
     - Upon receiving a user query (voice or text), the system retrieves relevant chunks from the Knowledge Base.
     - The LLM generates a response based *only* on the retrieved context to minimize hallucinations.
-- **Voice Capabilities (Vapi AI)**:
+- **Voice Capabilities (OpenAI Realtime API / Gemini Live)**:
     - **ASR (Automatic Speech Recognition)**: Transcribe user speech to text in real-time.
     - **TTS (Text-to-Speech)**: Convert LLM responses to natural-sounding speech.
     - **Turn-Taking**: Handle interruptions and pauses naturally.
