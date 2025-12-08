@@ -1,19 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Loader2,
-  Globe,
   CheckCircle2,
+  Globe,
   XCircle,
-  Clock,
-  Sparkles,
-  Database,
   FileText,
-  AlertCircle,
+  Sparkles,
   ArrowLeft,
+  Server,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ScrapeWithPages } from "@/types/scrape";
@@ -23,36 +21,8 @@ interface AgentProgressViewProps {
   scrape: ScrapeWithPages;
 }
 
-const STEPS = [
-  {
-    id: "analyzing",
-    label: "Analyzing URL",
-    description: "Verifying website accessibility and structure",
-    icon: Globe,
-  },
-  {
-    id: "crawling",
-    label: "Crawling Content",
-    description: "Discovering and downloading pages",
-    icon: FileText,
-  },
-  {
-    id: "processing_pages",
-    label: "Processing Data",
-    description: "Cleaning and structuring the content",
-    icon: Database,
-  },
-  {
-    id: "generating_embeddings",
-    label: "Training Model",
-    description: "Generating vector embeddings for knowledge base",
-    icon: Sparkles,
-  },
-] as const;
-
 export function AgentProgressView({ scrape }: AgentProgressViewProps) {
   const router = useRouter();
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
 
   // Poll for updates
   useEffect(() => {
@@ -65,209 +35,188 @@ export function AgentProgressView({ scrape }: AgentProgressViewProps) {
     }
   }, [scrape.status, router]);
 
-  // Determine current step index
-  useEffect(() => {
-    if (scrape.status === "completed") {
-      setCurrentStepIndex(STEPS.length);
-    } else if (scrape.status === "failed") {
-      // Keep looking at current_step to show where it failed
-      if (scrape.current_step) {
-        const stepIndex = STEPS.findIndex((s) => s.id === scrape.current_step);
-        if (stepIndex !== -1) setCurrentStepIndex(stepIndex);
-      }
-    } else if (scrape.current_step) {
-      const stepIndex = STEPS.findIndex((s) => s.id === scrape.current_step);
-      if (stepIndex !== -1) {
-        setCurrentStepIndex(stepIndex);
-      } else {
-        // Handle 'completed' as a step string if backend sends it
-        if (scrape.current_step === "completed")
-          setCurrentStepIndex(STEPS.length);
-      }
-    } else {
-      // Fallback for legacy records or missing current_step
-      if (scrape.status === "processing") setCurrentStepIndex(1); // Assume crawling
-      if (scrape.status === "pending") setCurrentStepIndex(0);
-    }
-  }, [scrape.status, scrape.current_step]);
-
-  const getStatusInfo = () => {
-    switch (scrape.status) {
-      case "processing":
-        return {
-          title: "Creating Your Agent",
-          description: "Reading the website and training the model...",
-        };
-      case "pending":
-        return {
-          title: "In Queue",
-          description: "Waiting for a worker to pick up the job...",
-        };
-      case "failed":
-        return {
-          title: "Creation Failed",
-          description:
-            scrape.error_message ||
-            "We couldn't process this website. Please try again.",
-        };
-      default:
-        return {
-          title: "Ready",
-          description: "Your agent is ready to chat!",
-        };
-    }
-  };
-
-  const statusInfo = getStatusInfo();
   const domain = new URL(scrape.url).hostname;
+  const isProcessing = scrape.status === "processing";
+  const isFailed = scrape.status === "failed";
+  // Treat pending as processing for UI purposes
+  const isActive =
+    scrape.status === "processing" || scrape.status === "pending";
+  const pagesProcessed = scrape.pages_scraped || 0;
+
+  // Get current URL from metadata
+  const currentUrl =
+    (scrape.metadata as any)?.current_processing_url ||
+    (scrape.metadata as any)?.current_page_url ||
+    scrape.url;
+
+  // Get recently processed pages (last 5)
+  const recentPages = [...(scrape.scraped_pages || [])]
+    .sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    )
+    .slice(0, 5);
+
+  if (isFailed) {
+    return (
+      <div className="min-h-full flex flex-col items-center justify-center p-8 bg-gray-50/50">
+        <div className="w-full max-w-md text-center space-y-6">
+          <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto border border-red-100">
+            <XCircle className="w-8 h-8 text-red-600" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">
+              Creation Failed
+            </h2>
+            <p className="text-sm text-gray-500 mt-2">
+              {scrape.error_message || "Unable to process this website"}
+            </p>
+          </div>
+          <Button
+            onClick={() => router.push("/playground")}
+            variant="outline"
+            className="mt-4"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Go Back
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-full bg-white p-4 md:p-8">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-2xl bg-white rounded-3xl p-6 md:p-12 border border-gray-100 shadow-xl shadow-blue-900/5 space-y-8"
-      >
-        {/* Header */}
-        <div className="text-center space-y-4">
-          {scrape.status === "failed" ? (
-            <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
-              <XCircle className="w-10 h-10 text-red-600" />
+    <div className="min-h-full flex flex-col items-center justify-center p-6 md:p-12 bg-gray-50/50 font-sans">
+      <div className="w-full max-w-2xl space-y-8">
+        {/* Header Status */}
+        <div className="text-center space-y-6">
+          <div className="relative inline-flex">
+            <div className="absolute inset-0 bg-blue-500/20 blur-2xl rounded-full" />
+            <div className="relative w-20 h-20 bg-white rounded-3xl shadow-sm border border-gray-100 flex items-center justify-center">
+              <div className="relative">
+                <div className="absolute inset-0 border-2 border-blue-100 rounded-full" />
+                <div className="absolute inset-0 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+              </div>
             </div>
-          ) : scrape.status === "completed" ? (
-            <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6">
-              <CheckCircle2 className="w-10 h-10 text-green-600" />
-            </div>
-          ) : (
-            <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6 relative">
-              <div className="absolute inset-0 rounded-full border-4 border-blue-100 border-t-blue-600 animate-spin"></div>
-              <Loader2 className="w-8 h-8 text-blue-600 animate-pulse" />
-            </div>
-          )}
+          </div>
 
-          <h2 className="text-3xl font-bold text-gray-900 tracking-tight">
-            {statusInfo.title}
-          </h2>
-          <p className="text-lg text-gray-500 max-w-md mx-auto">
-            {statusInfo.description}
-          </p>
-
-          {/* Website Pill */}
-          <div className="inline-flex items-center gap-2.5 px-4 py-2 bg-gray-50 rounded-full border border-gray-100 mt-2">
-            <Globe className="w-4 h-4 text-gray-500" />
-            <span className="text-sm font-medium text-gray-700">{domain}</span>
-            <span className="w-1 h-1 rounded-full bg-gray-300" />
-            <span className="text-sm text-gray-500 capitalize">
-              {scrape.crawl_type === "single" ? "Single Page" : "Full Site"}
-            </span>
+          <div className="space-y-2">
+            <h2 className="text-2xl md:text-3xl font-semibold text-gray-900 tracking-tight">
+              Training Agent
+            </h2>
+            <p className="text-gray-500 text-lg">
+              <span>
+                Reading content from{" "}
+                <span className="text-gray-900 font-medium">{domain}</span>
+              </span>
+            </p>
           </div>
         </div>
 
-        {/* Failed Action */}
-        {scrape.status === "failed" && (
-          <div className="flex justify-center pt-4">
-            <Button
-              onClick={() => router.push("/playground")}
-              className="rounded-full px-8 h-12 bg-gray-900 hover:bg-gray-800 text-white shadow-lg hover:shadow-xl transition-all"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Start Again
-            </Button>
+        {/* Current Activity Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm shadow-gray-100/50"
+        >
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center shrink-0 mt-0.5">
+              <Globe className="w-5 h-5 text-blue-600 animate-pulse" />
+            </div>
+            <div className="flex-1 min-w-0 space-y-1">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-gray-900">
+                  Processing Page
+                </p>
+                <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                  Active
+                </span>
+              </div>
+              <p className="text-sm text-gray-500 font-mono truncate bg-gray-50/50 p-2 rounded-lg border border-gray-100/50">
+                {currentUrl}
+              </p>
+              <div className="flex items-center gap-2 pt-1">
+                {scrape.current_step === "generating_embeddings" ? (
+                  <>
+                    <Sparkles className="w-3 h-3 text-purple-500" />
+                    <span className="text-xs text-purple-600 font-medium">
+                      Generating Knowledge...
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <FileText className="w-3 h-3 text-blue-500" />
+                    <span className="text-xs text-blue-600 font-medium">
+                      Extracting Content...
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
-        )}
+        </motion.div>
 
-        {/* Progress Steps */}
-        {(scrape.status === "processing" ||
-          scrape.status === "pending" ||
-          scrape.status === "failed") && (
-          <div className="max-w-md mx-auto w-full space-y-0 mt-8">
-            {STEPS.map((step, index) => {
-              const isCompleted = index < currentStepIndex;
-              const isCurrent =
-                index === currentStepIndex && scrape.status !== "failed";
-              const isFailed =
-                scrape.status === "failed" && index === currentStepIndex;
-              const isPending = index > currentStepIndex;
+        {/* Live Progress Feed */}
+        <div className="space-y-4 pt-4">
+          <div className="flex items-center justify-between px-2">
+            <div className="flex items-center gap-2">
+              <span className="flex h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+              <p className="text-sm font-medium text-gray-600">
+                Processed Pages ({pagesProcessed})
+              </p>
+            </div>
+          </div>
 
-              return (
-                <div key={step.id} className="relative pb-8 last:pb-0">
-                  {/* Vertical Line */}
-                  {index !== STEPS.length - 1 && (
-                    <div
-                      className={cn(
-                        "absolute top-8 left-6 w-0.5 h-full -ml-px transition-colors duration-500",
-                        isCompleted ? "bg-blue-600" : "bg-gray-100"
-                      )}
-                    />
-                  )}
-
-                  <div className="relative flex items-start gap-4 group">
-                    {/* Icon Circle */}
-                    <div
-                      className={cn(
-                        "relative z-10 flex items-center justify-center w-12 h-12 rounded-full border-2 transition-all duration-300 bg-white",
-                        isCompleted
-                          ? "border-blue-600 text-blue-600"
-                          : isCurrent
-                          ? "border-blue-600 text-blue-600 shadow-lg shadow-blue-500/20 scale-110"
-                          : isFailed
-                          ? "border-red-500 text-red-500 bg-red-50"
-                          : "border-gray-100 text-gray-300"
-                      )}
-                    >
-                      {isCompleted ? (
-                        <CheckCircle2 className="w-6 h-6" />
-                      ) : isFailed ? (
-                        <AlertCircle className="w-6 h-6" />
-                      ) : (
-                        <step.icon
-                          className={cn(
-                            "w-5 h-5",
-                            isCurrent && "animate-pulse"
-                          )}
-                        />
-                      )}
-
-                      {isCurrent && (
-                        <span className="absolute -right-1 -top-1 flex h-3 w-3">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Text Content */}
-                    <div className="pt-2">
-                      <h3
-                        className={cn(
-                          "font-semibold text-base transition-colors duration-300",
-                          isCompleted || isCurrent
-                            ? "text-gray-900"
-                            : isFailed
-                            ? "text-red-600"
-                            : "text-gray-400"
-                        )}
-                      >
-                        {step.label}
-                      </h3>
-                      <p
-                        className={cn(
-                          "text-sm mt-0.5 transition-colors duration-300",
-                          isCompleted || isCurrent || isFailed
-                            ? "text-gray-600"
-                            : "text-gray-400"
-                        )}
-                      >
-                        {step.description}
+          <div className="space-y-2 relative min-h-[100px]">
+            <AnimatePresence mode="popLayout">
+              {recentPages.length === 0 ? (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="text-center py-8 text-gray-400 text-sm border-2 border-dashed border-gray-100 rounded-xl"
+                >
+                  Waiting for first page...
+                </motion.div>
+              ) : (
+                recentPages.map((page) => (
+                  <motion.div
+                    key={page.id}
+                    layout
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className="group flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-blue-100/50"
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-700 truncate group-hover:text-gray-900 transition-colors">
+                        {page.title || "Untitled Page"}
+                      </p>
+                      <p className="text-xs text-gray-400 truncate font-mono mt-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                        {new URL(page.url).pathname}
                       </p>
                     </div>
-                  </div>
-                </div>
-              );
-            })}
+                    <span className="text-xs text-gray-300 font-mono tabular-nums">
+                      {new Date(page.created_at).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                      })}
+                    </span>
+                  </motion.div>
+                ))
+              )}
+            </AnimatePresence>
           </div>
-        )}
-      </motion.div>
+
+          {pagesProcessed > 5 && (
+            <p className="text-center text-xs text-gray-400 pt-2">
+              + {pagesProcessed - 5} more pages processed
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

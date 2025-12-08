@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabase, supabaseAdmin } from "@/lib/supabase";
 import type {
   Scrape,
   ScrapedPage,
@@ -17,8 +17,6 @@ export async function insertScrape(data: {
   pageLimit: number | null;
   userId: string;
 }): Promise<Scrape> {
-  console.log("[DB] Inserting scrape:", data);
-
   const { data: scrape, error } = await supabase
     .from("scrapes")
     .insert({
@@ -38,12 +36,12 @@ export async function insertScrape(data: {
     throw new Error(`Failed to insert scrape: ${error.message}`);
   }
 
-  console.log("[DB] Scrape inserted successfully:", scrape.id);
   return scrape;
 }
 
 /**
  * Update scrape status and metadata
+ * @param silent - If true, suppress console logs (useful for frequent webhook updates)
  */
 export async function updateScrape(
   scrapeId: string,
@@ -53,11 +51,13 @@ export async function updateScrape(
     pages_scraped?: number;
     error_message?: string | null;
     metadata?: Record<string, any> | null;
-  }
+  },
+  silent: boolean = false
 ): Promise<Scrape> {
-  console.log("[DB] Updating scrape:", scrapeId, updates);
+  // Try to use admin client if available (server-side) to bypass RLS
+  const client = supabaseAdmin || supabase;
 
-  const { data: scrape, error } = await supabase
+  const { data: scrape, error } = await client
     .from("scrapes")
     .update(updates)
     .eq("id", scrapeId)
@@ -69,12 +69,14 @@ export async function updateScrape(
     throw new Error(`Failed to update scrape: ${error.message}`);
   }
 
-  console.log(
-    "[DB] Scrape updated successfully:",
-    scrapeId,
-    "status:",
-    scrape.status
-  );
+  if (!silent) {
+    console.log(
+      "[DB] Scrape updated:",
+      scrapeId.slice(0, 8),
+      "→",
+      updates.status || updates.current_step
+    );
+  }
   return scrape;
 }
 
@@ -189,6 +191,7 @@ export async function getUserScrapes(userId: string): Promise<Scrape[]> {
 
 /**
  * Insert scraped pages in batch
+ * @param silent - If true, suppress console logs
  */
 export async function insertScrapedPages(
   pages: Array<{
@@ -198,16 +201,17 @@ export async function insertScrapedPages(
     content: string;
     markdown: string | null;
     metadata: Record<string, any> | null;
-  }>
+  }>,
+  silent: boolean = false
 ): Promise<ScrapedPage[]> {
   if (pages.length === 0) {
-    console.log("[DB] No pages to insert");
     return [];
   }
 
-  console.log("[DB] Inserting", pages.length, "scraped pages");
+  // Try to use admin client if available (server-side) to bypass RLS
+  const client = supabaseAdmin || supabase;
 
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from("scraped_pages")
     .insert(pages)
     .select();
@@ -217,7 +221,6 @@ export async function insertScrapedPages(
     throw new Error(`Failed to insert scraped pages: ${error.message}`);
   }
 
-  console.log("[DB] Scraped pages inserted successfully:", data?.length || 0);
   return data || [];
 }
 
@@ -238,6 +241,25 @@ export async function getPagesByScrapeId(
   }
 
   return data || [];
+}
+
+/**
+ * Get count of scraped pages for a scrape
+ */
+export async function getScrapedPagesCount(scrapeId: string): Promise<number> {
+  const client = supabaseAdmin || supabase;
+
+  const { count, error } = await client
+    .from("scraped_pages")
+    .select("*", { count: "exact", head: true })
+    .eq("scrape_id", scrapeId);
+
+  if (error) {
+    console.error("[DB] Get scraped pages count error:", error);
+    return 0;
+  }
+
+  return count || 0;
 }
 
 /**

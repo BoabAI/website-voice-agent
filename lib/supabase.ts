@@ -15,6 +15,23 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
+// Create an Admin client for backend tasks (bypasses RLS)
+// Supports both:
+// - Legacy service_role key (JWT format: eyJ...)
+// - New secret API key (format: sb_secret_...)
+// Only use this on the server side!
+const supabaseSecretKey =
+  process.env.SUPABASE_SECRET_API_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+export const supabaseAdmin = supabaseSecretKey
+  ? createClient(supabaseUrl, supabaseSecretKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    })
+  : null;
+
 /**
  * Sign in anonymously if no session exists
  * Returns the user ID
@@ -64,9 +81,3 @@ export function createClientSupabase() {
     },
   });
 }
-
-
-
-
-
-

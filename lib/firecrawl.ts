@@ -89,28 +89,26 @@ export async function scrapeSingleUrl(url: string): Promise<FirecrawlPageData> {
 }
 
 /**
- * Crawl an entire website up to a page limit
+ * Start a crawl job and return the ID (async)
  */
-export async function crawlWebsite(
+export async function startCrawlJob(
   url: string,
-  pageLimit: number = 10
-): Promise<FirecrawlPageData[]> {
+  pageLimit: number = 10,
+  webhook?: string
+): Promise<string> {
   try {
-    console.log(
-      "[Firecrawl] Starting crawl job for:",
-      url,
-      "limit:",
-      pageLimit
-    );
-
-    const crawlResponse = await firecrawl.startCrawl(url, {
+    const params: any = {
       limit: pageLimit,
       scrapeOptions: {
         formats: ["markdown", "html"],
       },
-    });
+    };
 
-    console.log("[Firecrawl] Start crawl response:", crawlResponse);
+    if (webhook) {
+      params.webhook = webhook;
+    }
+
+    const crawlResponse = await firecrawl.startCrawl(url, params);
 
     if (!crawlResponse.id) {
       throw new Error(
@@ -120,81 +118,95 @@ export async function crawlWebsite(
       );
     }
 
-    const crawlId = crawlResponse.id;
-    console.log("[Firecrawl] Crawl job started:", crawlId);
-
-    // Poll for completion
-    let isCompleted = false;
-    let attempts = 0;
-    // Poll every 2 seconds for up to 5 minutes (150 attempts)
-    const maxAttempts = 150;
-
-    while (!isCompleted && attempts < maxAttempts) {
-      await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2s
-
-      try {
-        const status = await firecrawl.getCrawlStatus(crawlId);
-        console.log(
-          `[Firecrawl] Poll attempt ${attempts + 1}: Status ${
-            status.status
-          }, Completed ${status.completed}/${status.total}`
-        );
-
-        if (status.status === "completed") {
-          isCompleted = true;
-          const data = status.data || [];
-          console.log("[Firecrawl] Crawl completed. Pages found:", data.length);
-
-          return data.map((page: any) => ({
-            url: page.metadata?.sourceURL || page.url,
-            title: page.metadata?.title || null,
-            content: page.html || page.markdown || "",
-            markdown: page.markdown
-              ? cleanFirecrawlPromotion(page.markdown)
-              : undefined,
-            metadata: page.metadata || {},
-          }));
-        } else if (
-          status.status === "failed" ||
-          status.status === "cancelled"
-        ) {
-          // Try to get partial data if available
-          if (status.data && status.data.length > 0) {
-            console.warn(
-              `[Firecrawl] Crawl ${status.status} but returned ${status.data.length} pages. Returning partial data.`
-            );
-            return status.data.map((page: any) => ({
-              url: page.metadata?.sourceURL || page.url,
-              title: page.metadata?.title || null,
-              content: page.html || page.markdown || "",
-              markdown: page.markdown
-                ? cleanFirecrawlPromotion(page.markdown)
-                : undefined,
-              metadata: page.metadata || {},
-            }));
-          }
-          throw new Error(`Crawl failed with status: ${status.status}`);
-        }
-      } catch (statusError) {
-        console.error(
-          `[Firecrawl] Error checking status on attempt ${attempts + 1}:`,
-          statusError
-        );
-        // Continue polling even if one status check fails
-      }
-
-      attempts++;
-    }
-
-    throw new Error("Crawl timed out after 5 minutes");
+    return crawlResponse.id;
   } catch (error) {
-    console.error("[Firecrawl] Crawl error:", error);
+    console.error("[Firecrawl] Start crawl error:", error);
     throw new Error(
-      `Failed to crawl website: ${
+      `Failed to start crawl: ${
         error instanceof Error ? error.message : "Unknown error"
       }`
     );
   }
+}
+
+/**
+ * Check the status of a crawl job
+ */
+export async function checkCrawlJob(crawlId: string): Promise<{
+  status: string;
+  completed: number;
+  total: number;
+  data: FirecrawlPageData[];
+  error?: string;
+}> {
+  try {
+    const status = await firecrawl.getCrawlStatus(crawlId);
+    console.log(
+      `[Firecrawl] Status check for ${crawlId}: ${status.status}, ${status.completed}/${status.total}`
+    );
+
+    const data = (status.data || []).map((page: any) => ({
+      url: page.metadata?.sourceURL || page.url,
+      title: page.metadata?.title || null,
+      content: page.html || page.markdown || "",
+      markdown: page.markdown
+        ? cleanFirecrawlPromotion(page.markdown)
+        : undefined,
+      metadata: page.metadata || {},
+    }));
+
+    return {
+      status: status.status,
+      completed: status.completed || 0,
+      total: status.total || 0,
+      data,
+      error: (status as any).error,
+    };
+  } catch (error) {
+    console.error("[Firecrawl] Check status error:", error);
+    throw new Error(
+      `Failed to check crawl status: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`
+    );
+  }
+}
+
+/**
+ * Crawl an entire website up to a page limit
+ * @deprecated Use startCrawlJob + checkCrawlJob for better reliability on Vercel
+ */
+export async function crawlWebsite(
+  url: string,
+  pageLimit: number = 10
+): Promise<FirecrawlPageData[]> {
+  // Legacy implementation using the new functions
+  const crawlId = await startCrawlJob(url, pageLimit);
+
+  // Poll for completion
+  let isCompleted = false;
+  let attempts = 0;
+  // Poll every 2 seconds for up to 5 minutes (150 attempts)
+  const maxAttempts = 150;
+
+  while (!isCompleted && attempts < maxAttempts) {
+    await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2s
+
+    const status = await checkCrawlJob(crawlId);
+
+    if (status.status === "completed") {
+      return status.data;
+    } else if (status.status === "failed" || status.status === "cancelled") {
+      if (status.data.length > 0) return status.data;
+      throw new Error(
+        status.error || `Crawl failed with status: ${status.status}`
+      );
+    }
+
+    attempts++;
+  }
+
+  throw new Error("Crawl timed out after 5 minutes");
 }
 
 /**
