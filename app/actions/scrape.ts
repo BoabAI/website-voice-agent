@@ -42,7 +42,7 @@ export async function checkExistingScrape(
 /**
  * Helper to get the base URL for webhooks
  */
-function getBaseUrl() {
+async function getBaseUrl() {
   // Prefer NEXT_PUBLIC_APP_URL if set
   if (process.env.NEXT_PUBLIC_APP_URL) {
     return process.env.NEXT_PUBLIC_APP_URL;
@@ -50,7 +50,7 @@ function getBaseUrl() {
 
   // Fallback to current site URL
   try {
-    const headersList = headers();
+    const headersList = await headers();
     const host = headersList.get("host");
     const protocol =
       headersList.get("x-forwarded-proto") ||
@@ -62,6 +62,7 @@ function getBaseUrl() {
   } catch (error) {
     // Ignore errors and continue to other fallbacks
   }
+
 
   // Fallback check (though we asked user to set it)
   if (process.env.VERCEL_URL) {
@@ -117,7 +118,7 @@ export async function startScraping(
     console.log(`   📝 Created agent: ${sid}`);
 
     // Prepare webhook URL
-    const baseUrl = getBaseUrl();
+    const baseUrl = await getBaseUrl();
     const webhookUrl = `${baseUrl}/api/webhooks/firecrawl?scrapeId=${scrape.id}`;
 
     // Determine limit (1 for single, or user defined for full)
@@ -289,7 +290,7 @@ export async function reScrapeSite(
       userId,
     });
 
-    const baseUrl = getBaseUrl();
+    const baseUrl = await getBaseUrl();
     const webhookUrl = `${baseUrl}/api/webhooks/firecrawl?scrapeId=${newScrape.id}`;
     const limit = scrape.page_limit || 10;
 
@@ -356,7 +357,7 @@ export async function scrapMore(
       userId,
     });
 
-    const baseUrl = getBaseUrl();
+    const baseUrl = await getBaseUrl();
     const webhookUrl = `${baseUrl}/api/webhooks/firecrawl?scrapeId=${newScrape.id}`;
 
     await startCrawlJob(scrape.url, newPageLimit, webhookUrl);
