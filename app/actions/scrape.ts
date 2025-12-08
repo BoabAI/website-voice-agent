@@ -11,6 +11,7 @@ import {
   getUserScrapes,
 } from "@/lib/db/scrapes";
 import { ensureAnonymousSession, getCurrentUserId } from "@/lib/supabase";
+import { headers } from "next/headers";
 import type {
   StartScrapeResult,
   ScrapeFormData,
@@ -45,6 +46,21 @@ function getBaseUrl() {
   // Prefer NEXT_PUBLIC_APP_URL if set
   if (process.env.NEXT_PUBLIC_APP_URL) {
     return process.env.NEXT_PUBLIC_APP_URL;
+  }
+
+  // Fallback to current site URL
+  try {
+    const headersList = headers();
+    const host = headersList.get("host");
+    const protocol =
+      headersList.get("x-forwarded-proto") ||
+      (host?.includes("localhost") ? "http" : "https");
+
+    if (host) {
+      return `${protocol}://${host}`;
+    }
+  } catch (error) {
+    // Ignore errors and continue to other fallbacks
   }
 
   // Fallback check (though we asked user to set it)

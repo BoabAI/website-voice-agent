@@ -11,7 +11,6 @@ import {
   FileText,
   Sparkles,
   ArrowLeft,
-  Server,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ScrapeWithPages } from "@/types/scrape";
@@ -93,21 +92,17 @@ export function AgentProgressView({ scrape }: AgentProgressViewProps) {
           <div className="relative inline-flex">
             <div className="absolute inset-0 bg-blue-500/20 blur-2xl rounded-full" />
             <div className="relative w-20 h-20 bg-white rounded-3xl shadow-sm border border-gray-100 flex items-center justify-center">
-              <div className="relative">
-                <div className="absolute inset-0 border-2 border-blue-100 rounded-full" />
-                <div className="absolute inset-0 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
-              </div>
+              <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
             </div>
           </div>
 
           <div className="space-y-2">
             <h2 className="text-2xl md:text-3xl font-semibold text-gray-900 tracking-tight">
-              Training Agent
+              Training Your Agent
             </h2>
             <p className="text-gray-500 text-lg">
               <span>
-                Reading content from{" "}
+                Learning from{" "}
                 <span className="text-gray-900 font-medium">{domain}</span>
               </span>
             </p>
