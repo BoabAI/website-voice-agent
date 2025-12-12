@@ -45,6 +45,18 @@
 
   --animate-blob: blob 7s infinite;
   --animate-fade-in-up: fadeInUp 0.5s ease-out forwards;
+  --animate-ripple: ripple 2s ease-out infinite;
+
+  @keyframes ripple {
+    0% {
+      transform: scale(1);
+      opacity: 0.8;
+    }
+    100% {
+      transform: scale(2.5);
+      opacity: 0;
+    }
+  }
 
   @keyframes blob {
     0% {

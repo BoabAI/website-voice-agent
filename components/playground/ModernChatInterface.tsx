@@ -26,6 +26,14 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { getInformationAction } from "@/app/actions/voice";
@@ -84,6 +92,12 @@ export function ModernChatInterface({ scrape }: ModernChatInterfaceProps) {
   const accessTokenRef = useRef<string | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [hasPriorHistory, setHasPriorHistory] = useState(false);
+
+  // Permission handling state
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionErrorType, setPermissionErrorType] = useState<
+    "denied" | "not-found" | null
+  >(null);
 
   // Update container bounds on mount/resize for subtitle positioning
   useEffect(() => {
@@ -403,9 +417,33 @@ export function ModernChatInterface({ scrape }: ModernChatInterfaceProps) {
       };
 
       await pc.setRemoteDescription(answer);
-    } catch (error) {
-      console.error("Failed to start voice session:", error);
-      toast.error("Failed to activate voice mode");
+    } catch (error: any) {
+      // Don't log full error for expected permission issues
+      if (
+        error.name !== "NotAllowedError" &&
+        error.name !== "PermissionDeniedError" &&
+        error.name !== "NotFoundError"
+      ) {
+        console.error("Failed to start voice session:", error);
+      }
+
+      // Handle microphone permission errors specifically
+      if (
+        error.name === "NotAllowedError" ||
+        error.name === "PermissionDeniedError"
+      ) {
+        console.log("[Voice] Microphone permission denied by user");
+        setPermissionErrorType("denied");
+        setPermissionDenied(true);
+      } else if (error.name === "NotFoundError") {
+        console.log("[Voice] Microphone device not found");
+        setPermissionErrorType("not-found");
+        setPermissionDenied(true);
+      } else {
+        console.error("Failed to start voice session:", error);
+        toast.error("Failed to activate voice mode");
+      }
+
       setVoiceStatus("idle");
       setIsVoiceMode(false);
     }
@@ -553,24 +591,11 @@ export function ModernChatInterface({ scrape }: ModernChatInterfaceProps) {
                   <div className="flex flex-col items-center justify-center gap-6">
                     <div className="relative flex items-center justify-center">
                       {[...Array(3)].map((_, i) => (
-                        <motion.div
+                        <div
                           key={i}
-                          className="absolute border border-blue-500/30 rounded-full bg-blue-500/5"
-                          initial={{
-                            width: 64,
-                            height: 64,
-                            scale: 1,
-                            opacity: 0.8,
-                          }}
-                          animate={{
-                            scale: 2.5,
-                            opacity: 0,
-                          }}
-                          transition={{
-                            duration: 2,
-                            ease: "easeOut",
-                            repeat: Infinity,
-                            delay: i * 0.6,
+                          className="absolute w-16 h-16 border border-blue-500/30 rounded-full bg-blue-500/5 animate-ripple opacity-0"
+                          style={{
+                            animationDelay: `${i * 0.6}s`,
                           }}
                         />
                       ))}
@@ -1044,6 +1069,52 @@ export function ModernChatInterface({ scrape }: ModernChatInterfaceProps) {
       </div>
 
       <audio ref={audioEl} autoPlay className="hidden" />
+
+      {/* Permission Denied Dialog */}
+      <Dialog open={permissionDenied} onOpenChange={setPermissionDenied}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {permissionErrorType === "denied"
+                ? "Microphone Access Blocked"
+                : "Microphone Not Found"}
+            </DialogTitle>
+            <DialogDescription asChild className="space-y-4 pt-4">
+              <div className="text-muted-foreground text-sm">
+                {permissionErrorType === "denied" ? (
+                  <div className="flex flex-col gap-2">
+                    <p>
+                      Your browser is blocking microphone access. To use voice mode,
+                      please enable it:
+                    </p>
+                    <ol className="list-decimal pl-5 space-y-2">
+                      <li>
+                        Click the 🔒 <strong>lock icon</strong> in your address bar.
+                      </li>
+                      <li>
+                        Find <strong>Microphone</strong> in the list.
+                      </li>
+                      <li>
+                        Toggle the switch to <strong>On</strong> or select{" "}
+                        <strong>Allow</strong>.
+                      </li>
+                      <li>Refresh the page to apply changes.</li>
+                    </ol>
+                  </div>
+                ) : (
+                  <p>
+                    No microphone was detected on your system. Please check your
+                    system settings and ensure a microphone is connected.
+                  </p>
+                )}
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setPermissionDenied(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
