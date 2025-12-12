@@ -25,7 +25,7 @@ export function ModernSidebar({
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   return (
-    <TooltipProvider>
+    <TooltipProvider delayDuration={0}>
       <motion.div
         initial={false}
         animate={{
@@ -33,7 +33,7 @@ export function ModernSidebar({
         }}
         transition={{ duration: 0.3, ease: "easeInOut" }}
         className={cn(
-          "relative h-full bg-white border-r border-gray-200 flex flex-col z-20",
+          "relative h-full bg-white border-r border-gray-200 flex flex-col z-20 overflow-hidden",
           className
         )}
       >

@@ -153,3 +153,6 @@ export async function processEmbeddings(
 
   return { chunksProcessed: processedCount, totalChunks: allChunks.length };
 }
+
+
+

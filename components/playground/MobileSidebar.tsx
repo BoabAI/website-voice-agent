@@ -54,7 +54,7 @@ export function MobileSidebar({
         </div>
 
         <div className="flex-1 overflow-hidden flex flex-col">
-          <TooltipProvider>
+          <TooltipProvider delayDuration={0}>
             <SidebarList
               scrapes={scrapes}
               isLoading={isLoading}

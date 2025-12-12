@@ -104,30 +104,30 @@ export function HowItWorksSection() {
                   {/* Gradient overlay on hover */}
                   <div className="absolute inset-0 bg-gradient-to-br from-blue-50/0 via-violet-50/0 to-purple-50/0 group-hover:from-blue-50/50 group-hover:via-violet-50/30 group-hover:to-purple-50/50 transition-all duration-300" />
 
-                  <div className="relative z-10">
-                    {/* Icon */}
-                    <div className="mb-6">
+                  <div className="relative z-10 pr-2">
+                    {/* Icon and Arrow */}
+                    <div className="mb-6 flex items-center justify-between">
                       <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-slate-100/80 border border-slate-100 group-hover:bg-blue-50 group-hover:border-blue-100 transition-all">
                         <step.icon className="w-6 h-6 text-slate-600 group-hover:text-blue-600 transition-colors" />
                       </div>
+                      
+                      {/* Connector Arrow (Desktop only) */}
+                      {index < steps.length - 1 && (
+                        <div className="hidden lg:block">
+                          <ArrowRight className="w-5 h-5 text-slate-300" />
+                        </div>
+                      )}
                     </div>
 
                     <h3 className="text-xl font-semibold mb-3 text-slate-900">
                       {step.title}
                     </h3>
-
+                    
                     <p className="text-slate-600 text-sm leading-relaxed">
                       {step.description}
                     </p>
                   </div>
                 </div>
-
-                {/* Connector Arrow (Desktop only) */}
-                {index < steps.length - 1 && (
-                  <div className="hidden lg:block absolute top-14 -right-3 z-20">
-                    <ArrowRight className="w-5 h-5 text-slate-300" />
-                  </div>
-                )}
               </motion.div>
             </div>
           ))}

@@ -89,7 +89,7 @@ export function FeaturesSection() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5, delay: 0.1 }}
-            className="text-4xl md:text-5xl font-bold tracking-tight mb-6 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent"
+            className="text-4xl md:text-5xl font-bold tracking-tight mb-6 text-slate-900"
           >
             Everything you need to build amazing WebAgents
           </motion.h2>

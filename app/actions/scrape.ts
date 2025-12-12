@@ -63,7 +63,6 @@ async function getBaseUrl() {
     // Ignore errors and continue to other fallbacks
   }
 
-
   // Fallback check (though we asked user to set it)
   if (process.env.VERCEL_URL) {
     return `https://${process.env.VERCEL_URL}`;

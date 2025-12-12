@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Plus, Loader2, Globe } from "lucide-react";
+import { Plus, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -32,7 +32,7 @@ export function SidebarList({
     <>
       {/* New Agent Button */}
       <div className="p-3 pb-2">
-        <Tooltip>
+        <Tooltip delayDuration={0}>
           <TooltipTrigger asChild>
             <Link href="/playground" className="block" onClick={onNavigate}>
               <Button
@@ -100,42 +100,47 @@ export function SidebarList({
                   );
 
                   return (
-                    <Link
-                      key={scrape.id}
-                      href={`/playground/${scrape.id}`}
-                      onClick={onNavigate}
-                    >
-                      <motion.div
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        className={cn(
-                          "flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-all group relative",
-                          isActive
-                            ? "bg-blue-50 text-blue-800 font-medium"
-                            : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                        )}
-                      >
-                        <div
-                          className={cn(
-                            "flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center transition-colors border",
-                            isActive
-                              ? "bg-blue-500 border-blue-400 text-white"
-                              : "bg-gray-50 border-gray-200 text-gray-500 group-hover:bg-gray-100 group-hover:border-gray-300 group-hover:text-gray-700"
-                          )}
+                    <Tooltip key={scrape.id} delayDuration={300}>
+                      <TooltipTrigger asChild>
+                        <Link
+                          href={`/playground/${scrape.id}`}
+                          onClick={onNavigate}
+                          className="block"
                         >
-                          <Globe className="w-3.5 h-3.5" />
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <p
-                            className="text-sm truncate transition-colors"
-                            title={domain}
+                          <motion.div
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            className={cn(
+                              "group relative flex items-center gap-3 rounded-lg px-3 py-2 transition-all",
+                              isActive
+                                ? "bg-blue-50 text-blue-800"
+                                : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                            )}
                           >
-                            {domain}
-                          </p>
-                        </div>
-                      </motion.div>
-                    </Link>
+                            <div
+                              className={cn(
+                                "flex h-7 w-7 shrink-0 items-center justify-center rounded-md border transition-colors",
+                                isActive
+                                  ? "border-blue-400 bg-blue-500 text-white"
+                                  : "border-gray-200 bg-gray-50 text-gray-500 group-hover:border-gray-300 group-hover:bg-gray-100 group-hover:text-gray-700"
+                              )}
+                            >
+                              <Globe className="h-3.5 w-3.5" />
+                            </div>
+
+                            <span
+                              className="text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis"
+                              style={{ maxWidth: "170px" }}
+                            >
+                              {domain}
+                            </span>
+                          </motion.div>
+                        </Link>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" sideOffset={5}>
+                        <p className="max-w-xs break-all">{domain}</p>
+                      </TooltipContent>
+                    </Tooltip>
                   );
                 })
               )}
