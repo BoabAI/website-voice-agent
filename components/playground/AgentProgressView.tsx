@@ -84,13 +84,15 @@ export function SimpleProgressView({
 
           <div className="space-y-2">
             <h2 className="text-2xl md:text-3xl font-semibold text-gray-900 tracking-tight">
-              {(refreshingPages && refreshingPages.length > 0) || isRefreshOperation
+              {(refreshingPages && refreshingPages.length > 0) ||
+              isRefreshOperation
                 ? "Refreshing Content"
                 : "Training Your Agent"}
             </h2>
             <p className="text-gray-500 text-lg">
               <span>
-                {(refreshingPages && refreshingPages.length > 0) || isRefreshOperation
+                {(refreshingPages && refreshingPages.length > 0) ||
+                isRefreshOperation
                   ? `Updating pages from `
                   : "Learning from "}
                 <span className="text-gray-900 font-medium">{domain}</span>
@@ -147,7 +149,8 @@ export function SimpleProgressView({
         </motion.div>
 
         {/* Refreshing Pages List (only if refreshing) */}
-        {((refreshingPages && refreshingPages.length > 0) || isRefreshOperation) && (
+        {((refreshingPages && refreshingPages.length > 0) ||
+          isRefreshOperation) && (
           <div className="space-y-4 pt-4">
             <div className="flex items-center justify-between px-2">
               <div className="flex items-center gap-2">
@@ -191,9 +194,10 @@ export function SimpleProgressView({
           </div>
         )}
 
-        {/* Live Progress Feed (Normal Mode or fallback) */}
-        {(!refreshingPages || refreshingPages.length === 0) && (
-          <div className="space-y-4 pt-4">
+        {/* Live Progress Feed (Normal Mode only, hidden during refresh) */}
+        {(!refreshingPages || refreshingPages.length === 0) &&
+          !isRefreshOperation && (
+            <div className="space-y-4 pt-4">
             <div className="flex items-center justify-between px-2">
               <div className="flex items-center gap-2">
                 <span className="flex h-2 w-2 rounded-full bg-green-500 animate-pulse" />
@@ -290,14 +294,12 @@ export function AgentProgressView({ scrape }: AgentProgressViewProps) {
 
   // Get recently processed pages (last 5)
   const recentPages = [...(scrape.scraped_pages || [])]
-    .sort(
-      (a, b) => {
-        // Use updated_at if available (for refreshed pages), otherwise created_at
-        const dateA = new Date(a.updated_at || a.created_at).getTime();
-        const dateB = new Date(b.updated_at || b.created_at).getTime();
-        return dateB - dateA;
-      }
-    )
+    .sort((a, b) => {
+      // Use updated_at if available (for refreshed pages), otherwise created_at
+      const dateA = new Date(a.updated_at || a.created_at).getTime();
+      const dateB = new Date(b.updated_at || b.created_at).getTime();
+      return dateB - dateA;
+    })
     .slice(0, 5);
 
   return (
