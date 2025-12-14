@@ -79,7 +79,15 @@ export async function POST(req: NextRequest) {
     }
 
     // Skip if already completed (prevent race conditions)
-    if (scrape.status === "completed") {
+    // BUT only if the event is NOT "completed" (sometimes we get multiple completion events)
+    // AND the current event is NOT a "started" event (we want to allow restarts if needed, though unlikely here)
+    if (
+      scrape.status === "completed" &&
+      !isCrawlComplete &&
+      !isCrawlStarted &&
+      // Allow late-arriving page events to process embeddings, but don't revert status
+      !isCrawlPage
+    ) {
       return NextResponse.json({ success: true, skipped: true });
     }
 
@@ -117,18 +125,21 @@ export async function POST(req: NextRequest) {
         : pageUrl;
 
       // Update step to processing_pages and log current URL
-      await updateScrape(
-        scrapeId,
-        {
-          status: "processing",
-          current_step: "processing_pages",
-          metadata: {
-            ...scrape.metadata,
-            current_processing_url: pageUrl,
+      // Only update status if NOT already completed
+      if (scrape.status !== "completed") {
+        await updateScrape(
+          scrapeId,
+          {
+            status: "processing",
+            current_step: "processing_pages",
+            metadata: {
+              ...scrape.metadata,
+              current_processing_url: pageUrl,
+            },
           },
-        },
-        !DEBUG
-      );
+          !DEBUG
+        );
+      }
 
       // Prepare and insert pages
       const scrapedPages = pages.map((page: any) => ({
@@ -146,14 +157,17 @@ export async function POST(req: NextRequest) {
       const totalPages = await getScrapedPagesCount(scrapeId);
 
       // Update step to generating_embeddings and update page count
-      await updateScrape(
-        scrapeId,
-        {
-          current_step: "generating_embeddings",
-          pages_scraped: totalPages,
-        },
-        !DEBUG
-      );
+      // Only update step if NOT already completed
+      if (scrape.status !== "completed") {
+        await updateScrape(
+          scrapeId,
+          {
+            current_step: "generating_embeddings",
+            pages_scraped: totalPages,
+          },
+          !DEBUG
+        );
+      }
 
       // Generate embeddings
       const result = await processEmbeddings(scrapeId, scrapedPages, !DEBUG);
@@ -176,19 +190,12 @@ export async function POST(req: NextRequest) {
       const duration = ((Date.now() - startTime) / 1000).toFixed(1);
 
       // Force status to "completed" regardless of DEBUG mode
-      // Clear refresh operation metadata
-      const currentMetadata = (scrape.metadata as any) || {};
-      const updatedMetadata = { ...currentMetadata };
-      delete updatedMetadata.is_refresh_operation;
-      delete updatedMetadata.refresh_started_at;
-
       await updateScrape(
         scrapeId,
         {
           status: "completed",
           current_step: "completed",
           pages_scraped: totalPages,
-          metadata: updatedMetadata,
         },
         true // Always use supabaseAdmin to ensure update permissions
       );
