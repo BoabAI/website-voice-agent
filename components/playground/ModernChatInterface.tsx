@@ -595,6 +595,18 @@ export function ModernChatInterface({ scrape }: ModernChatInterfaceProps) {
     isRefreshing ||
     (scrape.status !== "completed" && scrape.status !== "failed");
 
+  // Get recently processed pages for the progress view (only for initial agent creation)
+  const recentPages = [...(scrape.scraped_pages || [])]
+    .sort(
+      (a, b) => {
+        // Use updated_at if available (for refreshed pages), otherwise created_at
+        const dateA = new Date(a.updated_at || a.created_at).getTime();
+        const dateB = new Date(b.updated_at || b.created_at).getTime();
+        return dateB - dateA;
+      }
+    )
+    .slice(0, 5);
+
   if (shouldShowProgress) {
     return (
       <SimpleProgressView
@@ -605,7 +617,7 @@ export function ModernChatInterface({ scrape }: ModernChatInterfaceProps) {
         status={scrape.status || "processing"}
         step={scrape.current_step || "processing_pages"}
         pagesProcessed={scrape.pages_scraped || 0}
-        recentPages={[]}
+        recentPages={recentPages}
         refreshingPages={
           refreshingPages.length > 0 ? refreshingPages : undefined
         }
