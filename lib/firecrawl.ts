@@ -249,20 +249,22 @@ export async function batchScrapeUrls(
     // The method in the JS SDK is batchScrape, not batchScrapeUrls
     const batchResult = await firecrawl.batchScrape(urls, {
       formats: ["markdown", "html"],
-    });
+    } as any);
 
     // Debugging: Log keys to understand structure
     console.log("[Firecrawl] Batch result keys:", Object.keys(batchResult));
 
-    if (!batchResult.success && !batchResult.data) {
-      console.error("[Firecrawl] Batch scrape raw result:", JSON.stringify(batchResult, null, 2));
+    const result = batchResult as any;
+
+    if (!result.success && !result.data) {
+      console.error("[Firecrawl] Batch scrape raw result:", JSON.stringify(result, null, 2));
       throw new Error(
-        `Batch scrape failed: ${(batchResult as any).error || "Unknown error"}`
+        `Batch scrape failed: ${result.error || "Unknown error"}`
       );
     }
 
     // Handle case where success might be implicit if data is present
-    const pages = batchResult.data || [];
+    const pages = result.data || [];
 
     console.log(
       `[Firecrawl] Batch scrape successful, got ${pages.length} pages`
