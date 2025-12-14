@@ -9,7 +9,7 @@ All notable changes to the Web Voice Agent project will be documented in this fi
 #### Race Condition in Batch Refresh
 
 - **Issue**: When refreshing pages, the `batch_scrape.completed` event would set status to "completed", but concurrent page events (still generating embeddings) would overwrite it back to "processing", leaving the UI stuck on the loading screen forever.
-- **Fix**: 
+- **Fix**:
   - Batch page events (`type=batch`) no longer update the scrape status
   - Only `started` and `completed` events control status for batch operations
   - This eliminates the race condition entirely

@@ -72,12 +72,12 @@ The WebAgent is a Next.js application that enables users to interact with websit
 
 ### Webhook Events
 
-| Event | Handler Action |
-| :--- | :--- |
-| `crawl.started` / `batch_scrape.started` | Set status to "processing" |
-| `crawl.page` | Insert page, generate embeddings, update status |
-| `batch_scrape.page` | Insert page, generate embeddings (no status update) |
-| `crawl.completed` / `batch_scrape.completed` | Set status to "completed", clear refresh metadata |
+| Event                                        | Handler Action                                      |
+| :------------------------------------------- | :-------------------------------------------------- |
+| `crawl.started` / `batch_scrape.started`     | Set status to "processing"                          |
+| `crawl.page`                                 | Insert page, generate embeddings, update status     |
+| `batch_scrape.page`                          | Insert page, generate embeddings (no status update) |
+| `crawl.completed` / `batch_scrape.completed` | Set status to "completed", clear refresh metadata   |
 
 ### Key Components
 
@@ -359,6 +359,7 @@ Stores scraping job metadata.
 | `created_at`, `updated_at` | TIMESTAMPTZ | Timestamps                                     |
 
 **Metadata Fields** (stored in `metadata` JSONB):
+
 - `is_refreshing: boolean` - True during page refresh operation
 - `refreshing_pages: Array<{id, title, url}>` - Pages being refreshed
 - `current_processing_url: string` - URL currently being processed
