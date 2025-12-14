@@ -41,46 +41,27 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import type { ScrapeWithPages } from "@/types/scrape";
-import { reScrapeSite, scrapMore } from "@/app/actions/scrape";
+import { scrapMore } from "@/app/actions/scrape";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
+import { ScrapeRefreshDialog } from "./ScrapeRefreshDialog";
 
 interface AgentHeaderProps {
   scrape: ScrapeWithPages;
   onClearChat?: () => void;
+  onRefreshStart?: (
+    promise: Promise<any>,
+    selectedPages: { title?: string; url: string; id: string }[]
+  ) => void;
 }
 
-export function AgentHeader({ scrape, onClearChat }: AgentHeaderProps) {
-  const [isReScraping, setIsReScraping] = useState(false);
+export function AgentHeader({ scrape, onClearChat, onRefreshStart }: AgentHeaderProps) {
   const [isScrapingMore, setIsScrapingMore] = useState(false);
   const [additionalPages, setAdditionalPages] = useState("10");
   const [isScrapeMoreOpen, setIsScrapeMoreOpen] = useState(false);
   const [showPagesDialog, setShowPagesDialog] = useState(false);
+  const [showRefreshDialog, setShowRefreshDialog] = useState(false);
   const router = useRouter();
-
-  const handleReScrape = async () => {
-    setIsReScraping(true);
-    try {
-      const result = await reScrapeSite(scrape.id);
-      if (result.success && result.scrapeId) {
-        toast.success("Re-scraping started!", {
-          description: "Creating a new scrape with the same URL...",
-        });
-        router.push(`/playground/${result.scrapeId}`);
-        router.refresh();
-      } else {
-        toast.error("Failed to re-scrape", {
-          description: result.error || "Unknown error",
-        });
-      }
-    } catch (error) {
-      toast.error("Something went wrong", {
-        description: error instanceof Error ? error.message : "Unknown error",
-      });
-    } finally {
-      setIsReScraping(false);
-    }
-  };
 
   const handleScrapMore = async () => {
     setIsScrapingMore(true);
@@ -163,12 +144,11 @@ export function AgentHeader({ scrape, onClearChat }: AgentHeaderProps) {
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={handleReScrape}
-                disabled={true}
-                className="cursor-not-allowed opacity-50"
+                onClick={() => setShowRefreshDialog(true)}
+                className="cursor-pointer"
               >
                 <RefreshCw className="w-4 h-4 mr-2" />
-                Scrape Again
+                Refresh Pages
               </DropdownMenuItem>
               <Dialog
                 open={isScrapeMoreOpen}
@@ -239,6 +219,14 @@ export function AgentHeader({ scrape, onClearChat }: AgentHeaderProps) {
           </DropdownMenu>
         </div>
       </div>
+
+      {/* Scrape Refresh Dialog */}
+      <ScrapeRefreshDialog
+        scrape={scrape}
+        open={showRefreshDialog}
+        onOpenChange={setShowRefreshDialog}
+        onRefreshStart={onRefreshStart}
+      />
 
       {/* Crawled Pages Dialog */}
       <Dialog open={showPagesDialog} onOpenChange={setShowPagesDialog}>

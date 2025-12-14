@@ -16,45 +16,31 @@ import { Button } from "@/components/ui/button";
 import type { ScrapeWithPages } from "@/types/scrape";
 import { cn } from "@/lib/utils";
 
-interface AgentProgressViewProps {
-  scrape: ScrapeWithPages;
-}
-
-export function AgentProgressView({ scrape }: AgentProgressViewProps) {
-  const router = useRouter();
-
-  // Poll for updates
-  useEffect(() => {
-    if (scrape.status === "processing" || scrape.status === "pending") {
-      const interval = setInterval(() => {
-        router.refresh();
-      }, 3000);
-
-      return () => clearInterval(interval);
-    }
-  }, [scrape.status, router]);
-
-  const domain = new URL(scrape.url).hostname;
-  const isProcessing = scrape.status === "processing";
-  const isFailed = scrape.status === "failed";
-  // Treat pending as processing for UI purposes
-  const isActive =
-    scrape.status === "processing" || scrape.status === "pending";
-  const pagesProcessed = scrape.pages_scraped || 0;
-
-  // Get current URL from metadata
-  const currentUrl =
-    (scrape.metadata as any)?.current_processing_url ||
-    (scrape.metadata as any)?.current_page_url ||
-    scrape.url;
-
-  // Get recently processed pages (last 5)
-  const recentPages = [...(scrape.scraped_pages || [])]
-    .sort(
-      (a, b) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    )
-    .slice(0, 5);
+/**
+ * Reusable progress UI that can be used independently or with a scrape object
+ */
+export function SimpleProgressView({
+  domain,
+  currentUrl,
+  status,
+  step,
+  pagesProcessed,
+  recentPages = [],
+  errorMessage,
+  onBack,
+  refreshingPages,
+}: {
+  domain: string;
+  currentUrl: string;
+  status: string;
+  step: string;
+  pagesProcessed: number;
+  recentPages: any[];
+  errorMessage?: string | null;
+  onBack?: () => void;
+  refreshingPages?: { title?: string; url: string; id: string }[];
+}) {
+  const isFailed = status === "failed";
 
   if (isFailed) {
     return (
@@ -68,24 +54,22 @@ export function AgentProgressView({ scrape }: AgentProgressViewProps) {
               Creation Failed
             </h2>
             <p className="text-sm text-gray-500 mt-2">
-              {scrape.error_message || "Unable to process this website"}
+              {errorMessage || "Unable to process this website"}
             </p>
           </div>
-          <Button
-            onClick={() => router.push("/playground")}
-            variant="outline"
-            className="mt-4"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Go Back
-          </Button>
+          {onBack && (
+            <Button onClick={onBack} variant="outline" className="mt-4">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Go Back
+            </Button>
+          )}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-full flex flex-col items-center justify-center p-6 md:p-12 bg-gray-50/50 font-sans">
+    <div className="min-h-full flex flex-col items-center justify-center p-6 md:p-12 bg-gray-50/50 font-sans z-50">
       <div className="w-full max-w-2xl space-y-8">
         {/* Header Status */}
         <div className="text-center space-y-6">
@@ -98,11 +82,15 @@ export function AgentProgressView({ scrape }: AgentProgressViewProps) {
 
           <div className="space-y-2">
             <h2 className="text-2xl md:text-3xl font-semibold text-gray-900 tracking-tight">
-              Training Your Agent
+              {refreshingPages && refreshingPages.length > 0
+                ? "Refreshing Content"
+                : "Training Your Agent"}
             </h2>
             <p className="text-gray-500 text-lg">
               <span>
-                Learning from{" "}
+                {refreshingPages && refreshingPages.length > 0
+                  ? `Updating ${refreshingPages.length} pages from `
+                  : "Learning from "}
                 <span className="text-gray-900 font-medium">{domain}</span>
               </span>
             </p>
@@ -122,17 +110,21 @@ export function AgentProgressView({ scrape }: AgentProgressViewProps) {
             <div className="flex-1 min-w-0 space-y-1">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-gray-900">
-                  Processing Page
+                  {refreshingPages && refreshingPages.length > 0
+                    ? "Batch Processing"
+                    : "Processing Page"}
                 </p>
                 <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
                   Active
                 </span>
               </div>
               <p className="text-sm text-gray-500 font-mono truncate bg-gray-50/50 p-2 rounded-lg border border-gray-100/50">
-                {currentUrl}
+                {refreshingPages && refreshingPages.length > 0
+                  ? `${refreshingPages.length} pages selected for update`
+                  : currentUrl}
               </p>
               <div className="flex items-center gap-2 pt-1">
-                {scrape.current_step === "generating_embeddings" ? (
+                {step === "generating_embeddings" ? (
                   <>
                     <Sparkles className="w-3 h-3 text-purple-500" />
                     <span className="text-xs text-purple-600 font-medium">
@@ -152,66 +144,161 @@ export function AgentProgressView({ scrape }: AgentProgressViewProps) {
           </div>
         </motion.div>
 
-        {/* Live Progress Feed */}
-        <div className="space-y-4 pt-4">
-          <div className="flex items-center justify-between px-2">
-            <div className="flex items-center gap-2">
-              <span className="flex h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-              <p className="text-sm font-medium text-gray-600">
-                Processed Pages ({pagesProcessed})
-              </p>
+        {/* Refreshing Pages List (only if refreshing) */}
+        {refreshingPages && refreshingPages.length > 0 && (
+          <div className="space-y-4 pt-4">
+            <div className="flex items-center justify-between px-2">
+              <div className="flex items-center gap-2">
+                <span className="flex h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+                <p className="text-sm font-medium text-gray-600">
+                  Refreshing Pages ({refreshingPages.length})
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2 relative max-h-[300px] overflow-y-auto pr-2">
+              {refreshingPages.map((page) => (
+                <div
+                  key={page.id}
+                  className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100 shadow-sm"
+                >
+                  <Loader2 className="w-4 h-4 text-blue-500 animate-spin shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-700 truncate">
+                      {page.title || "Untitled Page"}
+                    </p>
+                    <p className="text-xs text-gray-400 truncate font-mono mt-0.5">
+                      {new URL(page.url).pathname}
+                    </p>
+                  </div>
+                  <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full font-medium">
+                    Processing
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
+        )}
 
-          <div className="space-y-2 relative min-h-[100px]">
-            <AnimatePresence mode="popLayout">
-              {recentPages.length === 0 ? (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="text-center py-8 text-gray-400 text-sm border-2 border-dashed border-gray-100 rounded-xl"
-                >
-                  Waiting for first page...
-                </motion.div>
-              ) : (
-                recentPages.map((page) => (
+        {/* Live Progress Feed (Normal Mode or fallback) */}
+        {(!refreshingPages || refreshingPages.length === 0) && (
+          <div className="space-y-4 pt-4">
+            <div className="flex items-center justify-between px-2">
+              <div className="flex items-center gap-2">
+                <span className="flex h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                <p className="text-sm font-medium text-gray-600">
+                  Processed Pages ({pagesProcessed})
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2 relative min-h-[100px]">
+              <AnimatePresence mode="popLayout">
+                {recentPages.length === 0 ? (
                   <motion.div
-                    key={page.id}
-                    layout
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    className="group flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-blue-100/50"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="text-center py-8 text-gray-400 text-sm border-2 border-dashed border-gray-100 rounded-xl"
                   >
-                    <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-700 truncate group-hover:text-gray-900 transition-colors">
-                        {page.title || "Untitled Page"}
-                      </p>
-                      <p className="text-xs text-gray-400 truncate font-mono mt-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
-                        {new URL(page.url).pathname}
-                      </p>
-                    </div>
-                    <span className="text-xs text-gray-300 font-mono tabular-nums">
-                      {new Date(page.created_at).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit",
-                      })}
-                    </span>
+                    Waiting for first page...
                   </motion.div>
-                ))
-              )}
-            </AnimatePresence>
-          </div>
+                ) : (
+                  recentPages.map((page) => (
+                    <motion.div
+                      key={page.id || page.url} // Fallback to URL if ID not present (mock data)
+                      layout
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="group flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-blue-100/50"
+                    >
+                      <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-700 truncate group-hover:text-gray-900 transition-colors">
+                          {page.title || "Untitled Page"}
+                        </p>
+                        <p className="text-xs text-gray-400 truncate font-mono mt-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                          {new URL(page.url).pathname}
+                        </p>
+                      </div>
+                      <span
+                        suppressHydrationWarning
+                        className="text-xs text-gray-300 font-mono tabular-nums"
+                      >
+                        {new Date(
+                          page.created_at || Date.now()
+                        ).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit",
+                        })}
+                      </span>
+                    </motion.div>
+                  ))
+                )}
+              </AnimatePresence>
+            </div>
 
-          {pagesProcessed > 5 && (
-            <p className="text-center text-xs text-gray-400 pt-2">
-              + {pagesProcessed - 5} more pages processed
-            </p>
-          )}
-        </div>
+            {pagesProcessed > 5 && (
+              <p className="text-center text-xs text-gray-400 pt-2">
+                + {pagesProcessed - 5} more pages processed
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+interface AgentProgressViewProps {
+  scrape: ScrapeWithPages;
+}
+
+export function AgentProgressView({ scrape }: AgentProgressViewProps) {
+  const router = useRouter();
+
+  // Poll for updates
+  useEffect(() => {
+    if (scrape.status === "processing" || scrape.status === "pending") {
+      const interval = setInterval(() => {
+        router.refresh();
+      }, 3000);
+
+      return () => clearInterval(interval);
+    }
+  }, [scrape.status, router]);
+
+  const domain = new URL(scrape.url).hostname;
+
+  // Get current URL from metadata
+  const currentUrl =
+    (scrape.metadata as any)?.current_processing_url ||
+    (scrape.metadata as any)?.current_page_url ||
+    scrape.url;
+
+  // Get recently processed pages (last 5)
+  const recentPages = [...(scrape.scraped_pages || [])]
+    .sort(
+      (a, b) => {
+        // Use updated_at if available (for refreshed pages), otherwise created_at
+        const dateA = new Date(a.updated_at || a.created_at).getTime();
+        const dateB = new Date(b.updated_at || b.created_at).getTime();
+        return dateB - dateA;
+      }
+    )
+    .slice(0, 5);
+
+  return (
+    <SimpleProgressView
+      domain={domain}
+      currentUrl={currentUrl}
+      status={scrape.status}
+      step={scrape.current_step || "crawling"}
+      pagesProcessed={scrape.pages_scraped || 0}
+      recentPages={recentPages}
+      errorMessage={scrape.error_message}
+      onBack={() => router.push("/playground")}
+    />
   );
 }

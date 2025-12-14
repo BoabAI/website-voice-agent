@@ -27,21 +27,25 @@ export async function processEmbeddings(
   const CONCURRENCY_LIMIT = 5;
 
   // 1. Collect all chunks first
-  const allChunks: { content: string }[] = [];
+  const allChunks: { content: string; pageId?: string }[] = [];
 
   for (const page of pages) {
     const content = page.markdown || page.content;
     if (!content) continue;
 
     const chunks = chunkMarkdown(content);
+    // Use page.id if available (from DB), otherwise null
+    const pageId = page.id || null;
 
     chunks.forEach((chunk) => {
       if (chunk && chunk.trim().length > 0) {
         if (chunk.length > 12000) {
           const subChunks = safeSplit(chunk, 12000);
-          subChunks.forEach((sc) => allChunks.push({ content: sc }));
+          subChunks.forEach((sc) =>
+            allChunks.push({ content: sc, pageId: pageId })
+          );
         } else {
-          allChunks.push({ content: chunk });
+          allChunks.push({ content: chunk, pageId: pageId });
         }
       }
     });
@@ -55,8 +59,8 @@ export async function processEmbeddings(
   const estimateTokens = (text: string) => Math.ceil(text.length / 4);
 
   // 2. Group chunks into dynamic batches
-  const batches: { content: string }[][] = [];
-  let currentBatch: { content: string }[] = [];
+  const batches: { content: string; pageId?: string }[][] = [];
+  let currentBatch: { content: string; pageId?: string }[] = [];
   let currentBatchTokens = 0;
 
   for (const chunk of allChunks) {
@@ -103,6 +107,8 @@ export async function processEmbeddings(
             scrape_id: scrapeId,
             content: item.content,
             embedding: result.data[index],
+            // Include page_id if available
+            page_id: item.pageId || null,
           }));
 
           const { error } = await client.from("scrape_embeddings").insert(rows);
@@ -133,6 +139,8 @@ export async function processEmbeddings(
                 scrape_id: scrapeId,
                 content: item.content,
                 embedding: result.data,
+                // Include page_id if available
+                page_id: item.pageId || null,
               });
 
               if (!error) processedCount++;

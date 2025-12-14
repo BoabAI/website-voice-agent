@@ -237,4 +237,111 @@ export async function mapWebsite(url: string): Promise<string[]> {
   }
 }
 
+/**
+ * Batch scrape multiple URLs
+ */
+export async function batchScrapeUrls(
+  urls: string[]
+): Promise<FirecrawlPageData[]> {
+  try {
+    console.log(`[Firecrawl] Batch scraping ${urls.length} URLs`);
+
+    // The method in the JS SDK is batchScrape, not batchScrapeUrls
+    const batchResult = await firecrawl.batchScrape(urls, {
+      formats: ["markdown", "html"],
+    });
+
+    // Debugging: Log keys to understand structure
+    console.log("[Firecrawl] Batch result keys:", Object.keys(batchResult));
+
+    if (!batchResult.success && !batchResult.data) {
+      console.error("[Firecrawl] Batch scrape raw result:", JSON.stringify(batchResult, null, 2));
+      throw new Error(
+        `Batch scrape failed: ${(batchResult as any).error || "Unknown error"}`
+      );
+    }
+
+    // Handle case where success might be implicit if data is present
+    const pages = batchResult.data || [];
+
+    console.log(
+      `[Firecrawl] Batch scrape successful, got ${pages.length} pages`
+    );
+
+    return pages.map((data: any) => ({
+      url: data.metadata?.sourceURL || data.url,
+      title: data.metadata?.title || null,
+      content: data.html || data.markdown || "",
+      markdown: data.markdown
+        ? cleanFirecrawlPromotion(data.markdown)
+        : undefined,
+      metadata: data.metadata || {},
+    }));
+  } catch (error) {
+    console.error("[Firecrawl] Batch scrape error:", error);
+    throw new Error(
+      `Failed to batch scrape: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`
+    );
+  }
+}
+
+/**
+ * Asynchronously batch scrape multiple URLs using webhooks
+ */
+export async function asyncBatchScrape(
+  urls: string[],
+  webhookUrl: string
+): Promise<string> {
+  try {
+    console.log(
+      `[Firecrawl] Starting async batch scrape for ${urls.length} URLs`
+    );
+
+    // According to docs, the payload for async batch scrape with webhook
+    // should use the POST /v2/batch/scrape endpoint
+    // The SDK likely exposes this via batchScrape but we need to check how to pass webhook
+    // or use direct fetch if the SDK doesn't support async/webhook param in batchScrape method
+
+    // Using direct fetch to ensure we hit the API correctly with webhook
+    const response = await fetch("https://api.firecrawl.dev/v2/batch/scrape", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.FIRECRAWL_API_KEY}`,
+      },
+      body: JSON.stringify({
+        urls,
+        formats: ["markdown", "html"],
+        webhook: webhookUrl,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      console.error("[Firecrawl] Async batch scrape failed:", result);
+      throw new Error(
+        `Failed to start async batch scrape: ${
+          result.error || result.message || "Unknown error"
+        }`
+      );
+    }
+
+    console.log(
+      `[Firecrawl] Async batch scrape started, job ID: ${result.id || result.jobId}`
+    );
+
+    return result.id || result.jobId;
+  } catch (error) {
+    console.error("[Firecrawl] Async batch scrape error:", error);
+    throw new Error(
+      `Failed to start async batch scrape: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`
+    );
+  }
+}
+
 export { firecrawl };

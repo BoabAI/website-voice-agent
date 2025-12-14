@@ -40,13 +40,28 @@ export async function POST(req: NextRequest) {
 
     // Determine event type
     const eventType = type || "unknown";
-    const isCrawlStarted = eventType === "crawl.started";
-    const isCrawlPage = eventType === "crawl.page";
+    const isCrawlStarted =
+      eventType === "crawl.started" ||
+      eventType === "batch.scrape.started" ||
+      eventType === "batch_scrape.started";
+    const isCrawlPage =
+      eventType === "crawl.page" ||
+      eventType === "batch.scrape.page" ||
+      eventType === "batch_scrape.page";
     const isCrawlComplete =
-      eventType === "crawl.completed" || body.status === "completed";
+      eventType === "crawl.completed" ||
+      eventType === "batch.scrape.completed" ||
+      eventType === "batch_scrape.completed" ||
+      body.status === "completed";
 
     // Handle failure events
-    if (body.success === false || error || type === "crawl.failed") {
+    if (
+      body.success === false ||
+      error ||
+      type === "crawl.failed" ||
+      type === "batch.scrape.failed" ||
+      type === "batch_scrape.failed"
+    ) {
       console.log(`❌ [${sid}] Crawl failed:`, error);
       await updateScrape(scrapeId, {
         status: "failed",
@@ -160,6 +175,7 @@ export async function POST(req: NextRequest) {
       const totalPages = await getScrapedPagesCount(scrapeId);
       const duration = ((Date.now() - startTime) / 1000).toFixed(1);
 
+      // Force status to "completed" regardless of DEBUG mode
       await updateScrape(
         scrapeId,
         {
@@ -167,7 +183,7 @@ export async function POST(req: NextRequest) {
           current_step: "completed",
           pages_scraped: totalPages,
         },
-        !DEBUG
+        true // Always use supabaseAdmin to ensure update permissions
       );
 
       console.log(`✅ [${sid}] Complete! ${totalPages} pages (${duration}s)`);

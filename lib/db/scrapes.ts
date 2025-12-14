@@ -148,9 +148,39 @@ export async function getScrapeWithPages(
     throw new Error(`Failed to get scraped pages: ${pagesError.message}`);
   }
 
+  // Deduplicate pages by URL, keeping the most recent one (based on updated_at or created_at)
+  // This is a safety measure against webhook duplicates
+  const uniquePagesMap = new Map<string, ScrapedPage>();
+
+  if (pages) {
+    for (const page of pages) {
+      const existing = uniquePagesMap.get(page.url);
+      if (!existing) {
+        uniquePagesMap.set(page.url, page);
+      } else {
+        // Compare timestamps to keep the newer one
+        const existingTime = new Date(
+          existing.updated_at || existing.created_at
+        ).getTime();
+        const newTime = new Date(page.updated_at || page.created_at).getTime();
+
+        if (newTime > existingTime) {
+          uniquePagesMap.set(page.url, page);
+        }
+      }
+    }
+  }
+
+  // NOTE: Cleanup logic moved to refreshSelectedPages to avoid side effects during read operations
+
+  const uniquePages = Array.from(uniquePagesMap.values()).sort(
+    (a, b) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+
   return {
     ...scrape,
-    scraped_pages: pages || [],
+    scraped_pages: uniquePages,
   };
 }
 
@@ -222,6 +252,39 @@ export async function insertScrapedPages(
   }
 
   return data || [];
+}
+
+/**
+ * Update a specific scraped page
+ */
+export async function updateScrapedPage(
+  pageId: string,
+  updates: {
+    content?: string;
+    markdown?: string | null;
+    title?: string | null;
+    metadata?: Record<string, any> | null;
+    updated_at?: string;
+  }
+): Promise<void> {
+  // Use admin client if available
+  const client = supabaseAdmin || supabase;
+
+  // Add updated_at if not provided
+  const updatesWithTimestamp = {
+    ...updates,
+    updated_at: updates.updated_at || new Date().toISOString(),
+  };
+
+  const { error } = await client
+    .from("scraped_pages")
+    .update(updatesWithTimestamp)
+    .eq("id", pageId);
+
+  if (error) {
+    console.error("[DB] Update scraped page error:", error);
+    throw new Error(`Failed to update scraped page: ${error.message}`);
+  }
 }
 
 /**

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { motion, AnimatePresence } from "framer-motion";
@@ -43,6 +44,7 @@ import { AgentHeader } from "./AgentHeader";
 import { AudioVisualizer } from "./AudioVisualizer";
 import { ensureAnonymousSession, createClientSupabase } from "@/lib/supabase";
 import { getChatHistory, clearChatHistory } from "@/app/actions/chat";
+import { SimpleProgressView } from "./AgentProgressView";
 
 interface ModernChatInterfaceProps {
   scrape: ScrapeWithPages;
@@ -67,10 +69,16 @@ const isSearchingTool = (m: any) => {
 };
 
 export function ModernChatInterface({ scrape }: ModernChatInterfaceProps) {
+  const router = useRouter();
   const scrapeId = scrape.id;
   const [input, setInput] = useState("");
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const [isVoiceMode, setIsVoiceMode] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshingPages, setRefreshingPages] = useState<
+    { title?: string; url: string; id: string }[]
+  >([]);
+  // Removed ignoreCompletion state in favor of hasSeenProcessing
   const [voiceStatus, setVoiceStatus] = useState<
     "idle" | "connecting" | "active"
   >("idle");
@@ -141,6 +149,15 @@ export function ModernChatInterface({ scrape }: ModernChatInterfaceProps) {
     },
   });
 
+  const lastMessage = messages[messages.length - 1];
+  const isLastMessageAssistant = lastMessage?.role === "assistant";
+
+  // Logic for showing the standalone thinking indicator
+  // Only show if we're waiting for a response but it hasn't been added to messages yet
+  const showStandaloneThinking =
+    (status === "submitted" || status === "streaming") &&
+    !isLastMessageAssistant;
+
   // Initialize session and load history
   useEffect(() => {
     async function initSessionAndHistory() {
@@ -207,14 +224,7 @@ export function ModernChatInterface({ scrape }: ModernChatInterfaceProps) {
     }
   };
 
-  const lastMessage = messages[messages.length - 1];
-  const isLastMessageAssistant = lastMessage?.role === "assistant";
-
-  // Logic for showing the standalone thinking indicator
-  // Only show if we're waiting for a response but it hasn't been added to messages yet
-  const showStandaloneThinking =
-    (status === "submitted" || status === "streaming") &&
-    !isLastMessageAssistant;
+  // Removed duplicate definition of showStandaloneThinking
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -229,6 +239,9 @@ export function ModernChatInterface({ scrape }: ModernChatInterfaceProps) {
       inputRef.current.focus();
     }
   }, [isVoiceMode]);
+
+  // Poll for updates when processing
+  // Removed old polling logic as it is now integrated above
 
   // Clear pending message when it appears in messages
   useEffect(() => {
@@ -525,12 +538,92 @@ export function ModernChatInterface({ scrape }: ModernChatInterfaceProps) {
     }
   };
 
+  const [hasSeenProcessing, setHasSeenProcessing] = useState(false);
+
+  const handleRefresh = async (
+    promise: Promise<any>,
+    selectedPages: { title?: string; url: string; id: string }[]
+  ) => {
+    setIsRefreshing(true);
+    setRefreshingPages(selectedPages);
+    setHasSeenProcessing(false); // Reset tracking
+
+    // Refresh router to fetch updated status
+    router.refresh();
+
+    try {
+      await promise;
+    } finally {
+      // Don't clear refreshing state here.
+    }
+  };
+
+  // Poll for updates when processing or refreshing
+  useEffect(() => {
+    if (
+      isRefreshing ||
+      scrape.status === "processing" ||
+      scrape.status === "pending"
+    ) {
+      const interval = setInterval(() => {
+        router.refresh();
+      }, 2000);
+
+      return () => clearInterval(interval);
+    }
+  }, [scrape.status, router, isRefreshing]);
+
+  // Handle status transitions
+  useEffect(() => {
+    // 1. Detect if we have entered the processing state
+    if (scrape.status === "processing" || scrape.status === "pending") {
+      setHasSeenProcessing(true);
+    }
+
+    // 2. Only clear refreshing if we are completed AND we have previously confirmed
+    //    that the server acknowledged the processing state.
+    //    This ensures we don't clear on the initial "stale" completed state.
+    if (scrape.status === "completed" && isRefreshing && hasSeenProcessing) {
+      setIsRefreshing(false);
+      setRefreshingPages([]);
+      setHasSeenProcessing(false);
+    }
+  }, [scrape.status, isRefreshing, hasSeenProcessing]);
+
+  // Check if we should show the progress view based on scrape status or manual refresh state
+  const shouldShowProgress =
+    isRefreshing ||
+    (scrape.status !== "completed" && scrape.status !== "failed");
+
+  if (shouldShowProgress) {
+    return (
+      <SimpleProgressView
+        domain={new URL(scrape.url).hostname}
+        currentUrl={
+          (scrape.metadata as any)?.current_processing_url || scrape.url
+        }
+        status={scrape.status || "processing"}
+        step={scrape.current_step || "processing_pages"}
+        pagesProcessed={scrape.pages_scraped || 0}
+        recentPages={[]}
+        refreshingPages={
+          refreshingPages.length > 0 ? refreshingPages : undefined
+        }
+      />
+    );
+  }
+
   return (
     <div className="flex flex-col h-full bg-white relative">
-      <AgentHeader scrape={scrape} onClearChat={handleClearChat} />
+      <AgentHeader
+        scrape={scrape}
+        onClearChat={handleClearChat}
+        onRefreshStart={handleRefresh}
+      />
 
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4 md:p-6 scroll-smooth flex flex-col">
+        {/* ... Rest of chat UI ... */}
         <div
           className={`max-w-3xl mx-auto w-full flex-1 ${
             messages.length === 0 &&
@@ -1084,12 +1177,13 @@ export function ModernChatInterface({ scrape }: ModernChatInterfaceProps) {
                 {permissionErrorType === "denied" ? (
                   <div className="flex flex-col gap-2">
                     <p>
-                      Your browser is blocking microphone access. To use voice mode,
-                      please enable it:
+                      Your browser is blocking microphone access. To use voice
+                      mode, please enable it:
                     </p>
                     <ol className="list-decimal pl-5 space-y-2">
                       <li>
-                        Click the 🔒 <strong>lock icon</strong> in your address bar.
+                        Click the 🔒 <strong>lock icon</strong> in your address
+                        bar.
                       </li>
                       <li>
                         Find <strong>Microphone</strong> in the list.

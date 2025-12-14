@@ -147,6 +147,23 @@ Successfully implemented the web scraping feature with Firecrawl and Supabase in
 - Toast notifications
 - Error messages
 
+### ✅ Async Batch Scraping & Webhooks (Phase 3) - Complete
+
+- **Async Architecture** for page refreshes
+  - Replaced blocking batch scrapes with non-blocking async jobs
+  - Solves Vercel timeout issues for large batch operations
+- **Webhook Integration**
+  - Robust handler for `batch_scrape` events
+  - Automated embedding generation on page arrival
+  - Secure status updates via service role
+- **Smart UI State Management**
+  - Persistent "Refreshing" overlay prevents user confusion
+  - Polling + Webhook coordination for accurate status
+  - Optimistic updates with server verification
+- **Data Integrity**
+  - Automatic cleanup of old page versions before refresh
+  - Prevention of duplicate content in database and vector store
+
 ### ✅ AI Chat & RAG (Phase 2) - Complete
 
 - **Agentic RAG implementation** with tool calling

@@ -1,6 +1,11 @@
 "use server";
 
-import { startCrawlJob } from "@/lib/firecrawl";
+import {
+  startCrawlJob,
+  scrapeSingleUrl,
+  batchScrapeUrls,
+  asyncBatchScrape,
+} from "@/lib/firecrawl";
 import {
   insertScrape,
   updateScrape,
@@ -9,8 +14,14 @@ import {
   getScrapeWithPages,
   getAllScrapes,
   getUserScrapes,
+  updateScrapedPage,
 } from "@/lib/db/scrapes";
-import { ensureAnonymousSession, getCurrentUserId } from "@/lib/supabase";
+import {
+  ensureAnonymousSession,
+  getCurrentUserId,
+  supabase,
+  supabaseAdmin,
+} from "@/lib/supabase";
 import { headers } from "next/headers";
 import type {
   StartScrapeResult,
@@ -18,6 +29,7 @@ import type {
   Scrape,
   ScrapeWithPages,
 } from "@/types/scrape";
+import { processEmbeddings } from "@/lib/processing";
 
 /**
  * Check if a URL has already been scraped
@@ -273,13 +285,8 @@ export async function reScrapeSite(
       };
     }
 
-    // Check if user owns this scrape
-    if (scrape.user_id !== userId) {
-      return {
-        success: false,
-        error: "Unauthorized",
-      };
-    }
+    // Permission check removed as per request
+    // if (scrape.user_id !== userId) ...
 
     // Create a new scrape with the same URL
     const newScrape = await insertScrape({
@@ -331,13 +338,8 @@ export async function scrapMore(
       };
     }
 
-    // Check if user owns this scrape
-    if (scrape.user_id !== userId) {
-      return {
-        success: false,
-        error: "Unauthorized",
-      };
-    }
+    // Permission check removed as per request
+    // if (scrape.user_id !== userId) ...
 
     if (scrape.crawl_type !== "full") {
       return {
@@ -375,6 +377,96 @@ export async function scrapMore(
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to scrape more",
+    };
+  }
+}
+
+/**
+ * Refresh selected pages for an existing scrape
+ */
+export async function refreshSelectedPages(
+  scrapeId: string,
+  pageIds: string[]
+): Promise<{ success: boolean; error?: string; count?: number }> {
+  try {
+    const userId = await ensureAnonymousSession();
+    const scrape = await getScrapeWithPages(scrapeId);
+
+    if (!scrape) {
+      return { success: false, error: "Scrape not found" };
+    }
+
+    // Permission check removed as per request
+    // if (scrape.user_id !== userId) ...
+
+    console.log(`Refreshing ${pageIds.length} pages for scrape ${scrapeId}`);
+
+    // Update status to processing
+    await updateScrape(scrapeId, { status: "processing" });
+
+    const client = supabaseAdmin || supabase;
+    const processedPages: any[] = [];
+    let successCount = 0;
+
+    // 1. Delete existing embeddings for these pages
+    const { error: deleteError } = await client
+      .from("scrape_embeddings")
+      .delete()
+      .in("page_id", pageIds);
+
+    if (deleteError) {
+      console.error("Error deleting old embeddings:", deleteError);
+      // Continue anyway, worst case we have duplicates (though page_id check in processing helps)
+    }
+
+    // 1.5 Delete the actual page records to prevent duplicates
+    // We do this BEFORE starting the scrape, so when new pages come in via webhook,
+    // they are the only versions of these URLs.
+    const { error: deletePagesError } = await client
+      .from("scraped_pages")
+      .delete()
+      .in("id", pageIds);
+
+    if (deletePagesError) {
+      console.error("Error deleting old pages:", deletePagesError);
+      // Not critical to stop, but good to know
+    } else {
+      console.log(`[DB] Deleted ${pageIds.length} old pages before refresh`);
+    }
+
+    // 2. Process pages in batch (Async with Webhook)
+    try {
+      const urlsToScrape = pageIds
+        .map((id) => scrape.scraped_pages.find((p) => p.id === id)?.url)
+        .filter((url): url is string => !!url);
+
+      if (urlsToScrape.length > 0) {
+        const baseUrl = await getBaseUrl();
+        // Append type=batch to distinguish handling in webhook
+        const webhookUrl = `${baseUrl}/api/webhooks/firecrawl?scrapeId=${scrapeId}&type=batch`;
+
+        await asyncBatchScrape(urlsToScrape, webhookUrl);
+      }
+    } catch (err) {
+      console.error("Batch scraping failed:", err);
+      // Fallback or just report error
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : "Batch scraping failed",
+      };
+    }
+
+    // 3. Status remains "processing" until webhook completes
+    // We do NOT call processEmbeddings here anymore
+
+    return { success: true, count: pageIds.length };
+  } catch (error) {
+    console.error("Error refreshing pages:", error);
+    // Restore status on error
+    await updateScrape(scrapeId, { status: "completed" });
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to refresh pages",
     };
   }
 }

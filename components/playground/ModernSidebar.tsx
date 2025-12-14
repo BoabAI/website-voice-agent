@@ -33,7 +33,7 @@ export function ModernSidebar({
         }}
         transition={{ duration: 0.3, ease: "easeInOut" }}
         className={cn(
-          "relative h-full bg-white border-r border-gray-200 flex flex-col z-20 overflow-hidden",
+          "relative h-full bg-white border-r border-gray-200 flex flex-col z-40 overflow-hidden",
           className
         )}
       >

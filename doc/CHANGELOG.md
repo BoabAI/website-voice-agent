@@ -2,6 +2,48 @@
 
 All notable changes to the Web Voice Agent project will be documented in this file.
 
+## [December 2024] - Async Batch Scraping & Webhooks
+
+### Added
+
+#### Async Batch Scraping
+
+- **Feature**: Replaced synchronous batch scraping with asynchronous jobs via Firecrawl webhooks
+  - **Why**: Prevents Vercel function timeouts (60s limit) when refreshing multiple pages
+  - **Implementation**:
+    - Backend initiates async batch job and returns immediately
+    - Frontend polls for status updates
+    - Firecrawl webhook notifies completion for each page and the batch job
+
+#### Robust Webhook Handling
+
+- **Updated**: `app/api/webhooks/firecrawl/route.ts`
+  - Supports `batch_scrape.*` events (started, page, completed, failed)
+  - Handles both single crawl and batch scrape payloads
+  - Updates database status securely using `supabaseAdmin` service role
+  - Generates embeddings automatically as pages arrive
+
+#### Smart UI Refresh Logic
+
+- **Updated**: `components/playground/ModernChatInterface.tsx`
+  - "Refreshing Content" overlay persists through the entire async process
+  - Intelligent state tracking (`hasSeenProcessing`) prevents premature UI flickering
+  - Waits for explicit "completed" signal from webhook before unlocking UI
+  - Polling interval of 2s ensures responsive updates
+
+#### Data Integrity
+
+- **Updated**: `app/actions/scrape.ts`
+  - **Proactive Cleanup**: Deletes old page records and embeddings _before_ starting a refresh
+  - Ensures no duplicate pages exist in the database after a refresh cycle
+  - Cleaner data management compared to post-process deduplication
+
+### Changed
+
+- **Refactored**: `components/playground/ScrapeRefreshDialog.tsx`
+  - Simplified success handling (no premature `router.refresh()`)
+  - Delegated state management to parent component for smoother transitions
+
 ## [December 2024] - Loading Screen & Progress Steps
 
 ### Added

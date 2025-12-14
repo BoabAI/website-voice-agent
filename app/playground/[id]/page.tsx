@@ -22,11 +22,8 @@ export default async function PlaygroundPage({ params }: PlaygroundPageProps) {
 
   return (
     <div className="flex-1 overflow-hidden">
-      {scrape.status === "completed" ? (
-        <ModernChatInterface scrape={scrape} />
-      ) : (
-        <AgentProgressView scrape={scrape} />
-      )}
+      {/* Show ModernChatInterface even if processing, but pass status so it can show progress overlay if needed */}
+      <ModernChatInterface scrape={scrape} />
     </div>
   );
 }
