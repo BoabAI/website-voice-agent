@@ -40,17 +40,19 @@ export async function POST(req: NextRequest) {
 
     // Determine event type
     const eventType = type || "unknown";
-    const isCrawlStarted =
+    console.log(`📥 [${sid}] Webhook event: ${eventType}`);
+
+    const isStarted =
       eventType === "crawl.started" ||
-      eventType === "batch.scrape.started" ||
+      eventType === "batch.scrape.job.started" ||
       eventType === "batch_scrape.started";
-    const isCrawlPage =
+    const isPage =
       eventType === "crawl.page" ||
       eventType === "batch.scrape.page" ||
       eventType === "batch_scrape.page";
-    const isCrawlComplete =
+    const isCompleted =
       eventType === "crawl.completed" ||
-      eventType === "batch.scrape.completed" ||
+      eventType === "batch.scrape.job.completed" ||
       eventType === "batch_scrape.completed" ||
       body.status === "completed";
 
@@ -59,10 +61,10 @@ export async function POST(req: NextRequest) {
       body.success === false ||
       error ||
       type === "crawl.failed" ||
-      type === "batch.scrape.failed" ||
+      type === "batch.scrape.job.failed" ||
       type === "batch_scrape.failed"
     ) {
-      console.log(`❌ [${sid}] Crawl failed:`, error);
+      console.log(`❌ [${sid}] Scrape/Crawl failed:`, error);
       await updateScrape(scrapeId, {
         status: "failed",
         error_message:
@@ -79,21 +81,15 @@ export async function POST(req: NextRequest) {
     }
 
     // Skip if already completed (prevent race conditions)
-    // BUT only if the event is NOT "completed" (sometimes we get multiple completion events)
-    // AND the current event is NOT a "started" event (we want to allow restarts if needed, though unlikely here)
-    if (
-      scrape.status === "completed" &&
-      !isCrawlComplete &&
-      !isCrawlStarted &&
-      // Allow late-arriving page events to process embeddings, but don't revert status
-      !isCrawlPage
-    ) {
+    // Note: We allow processing if it's a batch completion containing data,
+    // even if we thought it was done, to ensure we catch all pages.
+    if (scrape.status === "completed" && !isCompleted) {
       return NextResponse.json({ success: true, skipped: true });
     }
 
-    // Handle crawl.started - just update status to crawling
-    if (isCrawlStarted) {
-      console.log(`🔄 [${sid}] Crawl started`);
+    // Handle started - just update status to crawling
+    if (isStarted) {
+      console.log(`🔄 [${sid}] Job started`);
       await updateScrape(
         scrapeId,
         {
@@ -114,8 +110,9 @@ export async function POST(req: NextRequest) {
       (page: any) => page && (page.markdown || page.html || page.content)
     );
 
-    // Handle crawl.page - process the page
-    if (isCrawlPage && pages.length > 0) {
+    // Handle page processing
+    // We process pages if it's a page event OR if it's a completion event with data
+    if ((isPage || (isCompleted && pages.length > 0)) && pages.length > 0) {
       const pageUrl =
         pages[0]?.metadata?.sourceURL || pages[0]?.url || "unknown";
       const displayUrl = DEBUG
@@ -124,9 +121,13 @@ export async function POST(req: NextRequest) {
         ? pageUrl.slice(0, 57) + "..."
         : pageUrl;
 
-      // Update step to processing_pages and log current URL
-      // Only update status if NOT already completed
-      if (scrape.status !== "completed") {
+      // For batch/refresh operations, don't update status during page processing
+      // to avoid race conditions with the completed event
+      const isBatchOperation = searchParams.get("type") === "batch";
+
+      // Only update status for non-batch (crawl) operations
+      if (!isBatchOperation) {
+        // Update step to processing_pages and log current URL
         await updateScrape(
           scrapeId,
           {
@@ -156,9 +157,9 @@ export async function POST(req: NextRequest) {
       // Get updated page count
       const totalPages = await getScrapedPagesCount(scrapeId);
 
-      // Update step to generating_embeddings and update page count
-      // Only update step if NOT already completed
-      if (scrape.status !== "completed") {
+      // Only update step for non-batch operations
+      if (!isBatchOperation) {
+        // Update step to generating_embeddings and update page count
         await updateScrape(
           scrapeId,
           {
@@ -184,20 +185,25 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Handle crawl.completed - finalize
-    if (isCrawlComplete) {
+    // Handle completion - finalize
+    if (isCompleted) {
       const totalPages = await getScrapedPagesCount(scrapeId);
       const duration = ((Date.now() - startTime) / 1000).toFixed(1);
 
-      // Force status to "completed" regardless of DEBUG mode
+      // Clear refresh-related metadata and mark as completed
+      const cleanMetadata = { ...scrape.metadata };
+      delete cleanMetadata.is_refreshing;
+      delete cleanMetadata.refreshing_pages;
+
       await updateScrape(
         scrapeId,
         {
           status: "completed",
           current_step: "completed",
           pages_scraped: totalPages,
+          metadata: cleanMetadata,
         },
-        true // Always use supabaseAdmin to ensure update permissions
+        !DEBUG
       );
 
       console.log(`✅ [${sid}] Complete! ${totalPages} pages (${duration}s)`);

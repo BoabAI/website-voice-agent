@@ -74,21 +74,21 @@ export function ScrapeRefreshDialog({
         const result = await refreshSelectedPages(scrape.id, selectedPages);
         if (result.success) {
           toast.success(
-            `Refresh started for ${result.count} page${
-              result.count === 1 ? "" : "s"
-            }`
+            `Refreshing ${result.count} page${result.count === 1 ? "" : "s"}...`
           );
           setSelectedPages([]);
-          // router.refresh(); // Removed to prevent premature transition
+          router.refresh();
+          // We don't reset isRefreshing here to prevent UI flash
+          // The parent component will handle the state or unmounting
         } else {
           toast.error("Failed to refresh pages", {
             description: result.error,
           });
+          setIsRefreshing(false); // Only reset on failure
         }
       } catch (error) {
         toast.error("Something went wrong");
-      } finally {
-        setIsRefreshing(false);
+        setIsRefreshing(false); // Only reset on error
       }
     })();
 

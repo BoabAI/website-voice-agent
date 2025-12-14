@@ -194,73 +194,73 @@ export function SimpleProgressView({
           </div>
         )}
 
-        {/* Live Progress Feed (Normal Mode only, hidden during refresh) */}
-        {(!refreshingPages || refreshingPages.length === 0) &&
-          !isRefreshOperation && (
+        {/* Live Progress Feed (Normal Mode - only when NOT refreshing) */}
+        {!isRefreshOperation &&
+          (!refreshingPages || refreshingPages.length === 0) && (
             <div className="space-y-4 pt-4">
-            <div className="flex items-center justify-between px-2">
-              <div className="flex items-center gap-2">
-                <span className="flex h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                <p className="text-sm font-medium text-gray-600">
-                  Processed Pages ({pagesProcessed})
-                </p>
+              <div className="flex items-center justify-between px-2">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                  <p className="text-sm font-medium text-gray-600">
+                    Processed Pages ({pagesProcessed})
+                  </p>
+                </div>
               </div>
-            </div>
 
-            <div className="space-y-2 relative min-h-[100px]">
-              <AnimatePresence mode="popLayout">
-                {recentPages.length === 0 ? (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="text-center py-8 text-gray-400 text-sm border-2 border-dashed border-gray-100 rounded-xl"
-                  >
-                    Waiting for first page...
-                  </motion.div>
-                ) : (
-                  recentPages.map((page) => (
+              <div className="space-y-2 relative min-h-[100px]">
+                <AnimatePresence mode="popLayout">
+                  {recentPages.length === 0 ? (
                     <motion.div
-                      key={page.id || page.url} // Fallback to URL if ID not present (mock data)
-                      layout
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      className="group flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-blue-100/50"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="text-center py-8 text-gray-400 text-sm border-2 border-dashed border-gray-100 rounded-xl"
                     >
-                      <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-700 truncate group-hover:text-gray-900 transition-colors">
-                          {page.title || "Untitled Page"}
-                        </p>
-                        <p className="text-xs text-gray-400 truncate font-mono mt-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
-                          {new URL(page.url).pathname}
-                        </p>
-                      </div>
-                      <span
-                        suppressHydrationWarning
-                        className="text-xs text-gray-300 font-mono tabular-nums"
-                      >
-                        {new Date(
-                          page.created_at || Date.now()
-                        ).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          second: "2-digit",
-                        })}
-                      </span>
+                      Waiting for first page...
                     </motion.div>
-                  ))
-                )}
-              </AnimatePresence>
-            </div>
+                  ) : (
+                    recentPages.map((page) => (
+                      <motion.div
+                        key={page.id || page.url} // Fallback to URL if ID not present (mock data)
+                        layout
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="group flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-blue-100/50"
+                      >
+                        <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-700 truncate group-hover:text-gray-900 transition-colors">
+                            {page.title || "Untitled Page"}
+                          </p>
+                          <p className="text-xs text-gray-400 truncate font-mono mt-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                            {new URL(page.url).pathname}
+                          </p>
+                        </div>
+                        <span
+                          suppressHydrationWarning
+                          className="text-xs text-gray-300 font-mono tabular-nums"
+                        >
+                          {new Date(
+                            page.created_at || Date.now()
+                          ).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            second: "2-digit",
+                          })}
+                        </span>
+                      </motion.div>
+                    ))
+                  )}
+                </AnimatePresence>
+              </div>
 
-            {pagesProcessed > 5 && (
-              <p className="text-center text-xs text-gray-400 pt-2">
-                + {pagesProcessed - 5} more pages processed
-              </p>
-            )}
-          </div>
-        )}
+              {pagesProcessed > 5 && (
+                <p className="text-center text-xs text-gray-400 pt-2">
+                  + {pagesProcessed - 5} more pages processed
+                </p>
+              )}
+            </div>
+          )}
       </div>
     </div>
   );
@@ -302,6 +302,12 @@ export function AgentProgressView({ scrape }: AgentProgressViewProps) {
     })
     .slice(0, 5);
 
+  // Check if this is a refresh operation
+  const isRefreshing = (scrape.metadata as any)?.is_refreshing === true;
+
+  // Get refreshing pages from metadata (stored when refresh started)
+  const refreshingPages = (scrape.metadata as any)?.refreshing_pages || [];
+
   return (
     <SimpleProgressView
       domain={domain}
@@ -312,6 +318,8 @@ export function AgentProgressView({ scrape }: AgentProgressViewProps) {
       recentPages={recentPages}
       errorMessage={scrape.error_message}
       onBack={() => router.push("/playground")}
+      isRefreshOperation={isRefreshing}
+      refreshingPages={isRefreshing ? refreshingPages : undefined}
     />
   );
 }

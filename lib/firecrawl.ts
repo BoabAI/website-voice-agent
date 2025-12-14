@@ -257,7 +257,10 @@ export async function batchScrapeUrls(
     const result = batchResult as any;
 
     if (!result.success && !result.data) {
-      console.error("[Firecrawl] Batch scrape raw result:", JSON.stringify(result, null, 2));
+      console.error(
+        "[Firecrawl] Batch scrape raw result:",
+        JSON.stringify(result, null, 2)
+      );
       throw new Error(
         `Batch scrape failed: ${result.error || "Unknown error"}`
       );
@@ -332,7 +335,9 @@ export async function asyncBatchScrape(
     }
 
     console.log(
-      `[Firecrawl] Async batch scrape started, job ID: ${result.id || result.jobId}`
+      `[Firecrawl] Async batch scrape started, job ID: ${
+        result.id || result.jobId
+      }`
     );
 
     return result.id || result.jobId;

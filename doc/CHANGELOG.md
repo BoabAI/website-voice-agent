@@ -2,6 +2,65 @@
 
 All notable changes to the Web Voice Agent project will be documented in this file.
 
+## [December 2024] - Page Refresh Improvements
+
+### Fixed
+
+#### Race Condition in Batch Refresh
+
+- **Issue**: When refreshing pages, the `batch_scrape.completed` event would set status to "completed", but concurrent page events (still generating embeddings) would overwrite it back to "processing", leaving the UI stuck on the loading screen forever.
+- **Fix**: 
+  - Batch page events (`type=batch`) no longer update the scrape status
+  - Only `started` and `completed` events control status for batch operations
+  - This eliminates the race condition entirely
+
+#### Webhook Event Types
+
+- **Issue**: Firecrawl sends `batch_scrape.*` events (with underscore), but handler only recognized `batch.scrape.*` (with dot)
+- **Fix**: Added support for both naming conventions:
+  - `batch_scrape.started`, `batch_scrape.page`, `batch_scrape.completed`
+  - `batch.scrape.job.started`, `batch.scrape.page`, `batch.scrape.job.completed`
+
+#### Toast Message Count
+
+- **Issue**: Toast showed "Successfully refreshed 0 pages" because count was returned before async completion
+- **Fix**: Now returns the number of pages being refreshed and shows "Refreshing X pages..."
+
+### Added
+
+#### Server-Side Refresh State
+
+- **New Metadata Fields** in `scrapes.metadata`:
+  - `is_refreshing: boolean` - Indicates refresh operation in progress
+  - `refreshing_pages: Array<{id, title, url}>` - Pages being refreshed
+- **Benefits**:
+  - Server-rendered UI can show correct refresh state
+  - No flash of incorrect UI during page transitions
+  - Consistent loading screen across client/server renders
+
+#### Force Dynamic Page Rendering
+
+- **Updated**: `app/playground/[id]/page.tsx`
+  - Added `export const dynamic = "force-dynamic"` to prevent Next.js caching
+  - Ensures fresh database queries on every request
+
+### Changed
+
+#### Refresh Flow (Improved)
+
+1. User selects pages and clicks refresh
+2. Action stores `is_refreshing: true` and `refreshing_pages` in metadata
+3. Old pages are deleted (cascades to embeddings)
+4. Async batch scrape initiated via Firecrawl webhook
+5. UI shows "Refreshing Content" with list of pages being updated
+6. Webhook events process pages (insert + generate embeddings)
+7. `batch_scrape.completed` clears metadata and sets status to "completed"
+8. UI automatically transitions to chat interface
+
+#### Type Updates
+
+- **`types/scrape.ts`**: Added optional `updated_at` field to `ScrapedPage` interface
+
 ## [December 2024] - Async Batch Scraping & Webhooks
 
 ### Added

@@ -3,6 +3,9 @@ import { getScrapeByIdAction } from "@/app/actions/scrape";
 import { AgentProgressView } from "@/components/playground/AgentProgressView";
 import { ModernChatInterface } from "@/components/playground/ModernChatInterface";
 
+// Force dynamic rendering to ensure fresh data on every request
+export const dynamic = "force-dynamic";
+
 interface PlaygroundPageProps {
   params: Promise<{
     id: string;
@@ -22,8 +25,11 @@ export default async function PlaygroundPage({ params }: PlaygroundPageProps) {
 
   return (
     <div className="flex-1 overflow-hidden">
-      {/* Show ModernChatInterface even if processing, but pass status so it can show progress overlay if needed */}
-      <ModernChatInterface scrape={scrape} />
+      {scrape.status === "completed" ? (
+        <ModernChatInterface scrape={scrape} />
+      ) : (
+        <AgentProgressView scrape={scrape} />
+      )}
     </div>
   );
 }

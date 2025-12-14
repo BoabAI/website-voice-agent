@@ -52,9 +52,32 @@ The WebAgent is a Next.js application that enables users to interact with websit
 
 1.  User enters a URL on the homepage
 2.  Backend validates URL and checks for duplicates
-3.  Firecrawl API scrapes the website (single page or full crawl)
-4.  Content is stored in `scrapes` and `scraped_pages` tables
-5.  User is redirected to playground page
+3.  Firecrawl API scrapes the website (single page or full crawl) via webhooks
+4.  Webhooks process pages incrementally (insert + generate embeddings)
+5.  Content is stored in `scrapes`, `scraped_pages`, and `scrape_embeddings` tables
+6.  User is redirected to playground page
+
+### Page Refresh Flow
+
+1.  User selects pages to refresh in the dialog
+2.  Backend stores refresh state in `scrapes.metadata`:
+    - `is_refreshing: true`
+    - `refreshing_pages: [{id, title, url}, ...]`
+3.  Old page records are deleted (cascades to embeddings)
+4.  Async batch scrape initiated with `type=batch` webhook URL
+5.  UI shows "Refreshing Content" loading screen
+6.  Webhooks process each page (without updating status to prevent race conditions)
+7.  `batch_scrape.completed` event clears metadata and sets status to "completed"
+8.  UI transitions back to chat interface
+
+### Webhook Events
+
+| Event | Handler Action |
+| :--- | :--- |
+| `crawl.started` / `batch_scrape.started` | Set status to "processing" |
+| `crawl.page` | Insert page, generate embeddings, update status |
+| `batch_scrape.page` | Insert page, generate embeddings (no status update) |
+| `crawl.completed` / `batch_scrape.completed` | Set status to "completed", clear refresh metadata |
 
 ### Key Components
 
@@ -329,23 +352,32 @@ Stores scraping job metadata.
 | `page_limit`               | INTEGER     | Max pages (full crawl only)                    |
 | `pages_scraped`            | INTEGER     | Actual pages scraped                           |
 | `status`                   | TEXT        | 'pending', 'processing', 'completed', 'failed' |
+| `current_step`             | TEXT        | Current processing step                        |
 | `error_message`            | TEXT        | Error if failed                                |
 | `user_id`                  | UUID        | Anonymous user ID                              |
+| `metadata`                 | JSONB       | Additional data (refresh state, etc.)          |
 | `created_at`, `updated_at` | TIMESTAMPTZ | Timestamps                                     |
+
+**Metadata Fields** (stored in `metadata` JSONB):
+- `is_refreshing: boolean` - True during page refresh operation
+- `refreshing_pages: Array<{id, title, url}>` - Pages being refreshed
+- `current_processing_url: string` - URL currently being processed
 
 #### `scraped_pages`
 
 Stores scraped page content.
 
-| Column      | Type  | Description             |
-| :---------- | :---- | :---------------------- |
-| `id`        | UUID  | Primary key             |
-| `scrape_id` | UUID  | Foreign key → `scrapes` |
-| `url`       | TEXT  | Page URL                |
-| `title`     | TEXT  | Page title              |
-| `content`   | TEXT  | HTML content            |
-| `markdown`  | TEXT  | Markdown version        |
-| `metadata`  | JSONB | Additional data         |
+| Column       | Type        | Description             |
+| :----------- | :---------- | :---------------------- |
+| `id`         | UUID        | Primary key             |
+| `scrape_id`  | UUID        | Foreign key → `scrapes` |
+| `url`        | TEXT        | Page URL                |
+| `title`      | TEXT        | Page title              |
+| `content`    | TEXT        | HTML content            |
+| `markdown`   | TEXT        | Markdown version        |
+| `metadata`   | JSONB       | Additional data         |
+| `created_at` | TIMESTAMPTZ | Creation timestamp      |
+| `updated_at` | TIMESTAMPTZ | Last update timestamp   |
 
 #### `scrape_embeddings`
 
@@ -386,17 +418,20 @@ Stores user chat history for each agent.
 | `components/playground/ModernChatInterface.tsx` | Text + Voice UI with chat history          |
 | `components/playground/VoiceChat.tsx`           | Voice agent WebRTC client                  |
 | `components/playground/AgentHeader.tsx`         | Agent metadata & actions (with clear chat) |
+| `components/playground/AgentProgressView.tsx`   | Loading/progress view for scraping         |
+| `components/playground/ScrapeRefreshDialog.tsx` | Page selection dialog for refresh          |
 | `components/playground/ScrapeDetails.tsx`       | Scrape info & page list                    |
 
 ### Backend
 
-| File                           | Purpose                                |
-| :----------------------------- | :------------------------------------- |
-| `app/api/chat/route.ts`        | Text chat API with message persistence |
-| `app/api/voice/token/route.ts` | Voice token generation (OpenAI)        |
-| `app/actions/scrape.ts`        | Scraping server actions                |
-| `app/actions/voice.ts`         | Voice tool server action               |
-| `app/actions/chat.ts`          | Chat history server actions            |
+| File                                  | Purpose                                |
+| :------------------------------------ | :------------------------------------- |
+| `app/api/chat/route.ts`               | Text chat API with message persistence |
+| `app/api/voice/token/route.ts`        | Voice token generation (OpenAI)        |
+| `app/api/webhooks/firecrawl/route.ts` | Firecrawl webhook handler              |
+| `app/actions/scrape.ts`               | Scraping server actions                |
+| `app/actions/voice.ts`                | Voice tool server action               |
+| `app/actions/chat.ts`                 | Chat history server actions            |
 
 ### Libraries
 

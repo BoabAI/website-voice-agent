@@ -399,14 +399,24 @@ export async function refreshSelectedPages(
     // Permission check removed as per request
     // if (scrape.user_id !== userId) ...
 
+    // Get the pages to refresh with their details
+    const pagesToRefresh = scrape.scraped_pages
+      .filter((p) => pageIds.includes(p.id))
+      .map((p) => ({
+        id: p.id,
+        title: p.title || undefined,
+        url: p.url,
+      }));
+
     console.log(`Refreshing ${pageIds.length} pages for scrape ${scrapeId}`);
 
-    // Update status to processing and mark as refresh operation
+    // Update status to processing and store refreshing pages info
     await updateScrape(scrapeId, {
       status: "processing",
       metadata: {
-        ...(typeof scrape.metadata === "object" ? scrape.metadata : {}),
-        operation_mode: "refresh",
+        ...scrape.metadata,
+        is_refreshing: true,
+        refreshing_pages: pagesToRefresh,
       },
     });
 
@@ -414,30 +424,15 @@ export async function refreshSelectedPages(
     const processedPages: any[] = [];
     let successCount = 0;
 
-    // 1. Delete existing embeddings for these pages
+    // 1. Delete existing pages (cascade deletes embeddings)
     const { error: deleteError } = await client
-      .from("scrape_embeddings")
-      .delete()
-      .in("page_id", pageIds);
-
-    if (deleteError) {
-      console.error("Error deleting old embeddings:", deleteError);
-      // Continue anyway, worst case we have duplicates (though page_id check in processing helps)
-    }
-
-    // 1.5 Delete the actual page records to prevent duplicates
-    // We do this BEFORE starting the scrape, so when new pages come in via webhook,
-    // they are the only versions of these URLs.
-    const { error: deletePagesError } = await client
       .from("scraped_pages")
       .delete()
       .in("id", pageIds);
 
-    if (deletePagesError) {
-      console.error("Error deleting old pages:", deletePagesError);
-      // Not critical to stop, but good to know
-    } else {
-      console.log(`[DB] Deleted ${pageIds.length} old pages before refresh`);
+    if (deleteError) {
+      console.error("Error deleting old pages:", deleteError);
+      // Continue anyway, worst case we have duplicates
     }
 
     // 2. Process pages in batch (Async with Webhook)
@@ -453,6 +448,9 @@ export async function refreshSelectedPages(
 
         await asyncBatchScrape(urlsToScrape, webhookUrl);
       }
+
+      // Return the number of pages we're starting to refresh
+      return { success: true, count: urlsToScrape.length };
     } catch (err) {
       console.error("Batch scraping failed:", err);
       // Fallback or just report error
@@ -461,11 +459,6 @@ export async function refreshSelectedPages(
         error: err instanceof Error ? err.message : "Batch scraping failed",
       };
     }
-
-    // 3. Status remains "processing" until webhook completes
-    // We do NOT call processEmbeddings here anymore
-
-    return { success: true, count: pageIds.length };
   } catch (error) {
     console.error("Error refreshing pages:", error);
     // Restore status on error
