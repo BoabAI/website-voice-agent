@@ -590,15 +590,13 @@ export function ModernChatInterface({ scrape }: ModernChatInterfaceProps) {
     }
   }, [scrape.status, isRefreshing, hasSeenProcessing]);
 
-  // Check if this is a refresh operation (either from current state or metadata)
-  const isRefreshOperation =
-    isRefreshing ||
-    ((scrape.metadata as any)?.is_refresh_operation === true);
-
-  // Check if we should show the progress view based on scrape status or refresh state
+  // Check if we should show the progress view based on scrape status or manual refresh state
   const shouldShowProgress =
-    isRefreshOperation ||
+    isRefreshing ||
     (scrape.status !== "completed" && scrape.status !== "failed");
+
+  const isRefreshOperation =
+    isRefreshing || (scrape.metadata as any)?.operation_mode === "refresh";
 
   // Get recently processed pages for the progress view (only for initial agent creation)
   const recentPages = [...(scrape.scraped_pages || [])]
@@ -620,9 +618,9 @@ export function ModernChatInterface({ scrape }: ModernChatInterfaceProps) {
         status={scrape.status || "processing"}
         step={scrape.current_step || "processing_pages"}
         pagesProcessed={scrape.pages_scraped || 0}
-        recentPages={isRefreshOperation ? [] : recentPages}
+        recentPages={recentPages}
         refreshingPages={
-          isRefreshOperation ? [] : refreshingPages.length > 0 ? refreshingPages : undefined
+          refreshingPages.length > 0 ? refreshingPages : undefined
         }
         isRefreshOperation={isRefreshOperation}
       />

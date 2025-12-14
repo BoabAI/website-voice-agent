@@ -405,10 +405,9 @@ export async function refreshSelectedPages(
     await updateScrape(scrapeId, {
       status: "processing",
       metadata: {
-        ...((scrape.metadata as any) || {}),
-        is_refresh_operation: true,
-        refresh_started_at: new Date().toISOString(),
-      }
+        ...(typeof scrape.metadata === "object" ? scrape.metadata : {}),
+        operation_mode: "refresh",
+      },
     });
 
     const client = supabaseAdmin || supabase;
