@@ -590,21 +590,24 @@ export function ModernChatInterface({ scrape }: ModernChatInterfaceProps) {
     }
   }, [scrape.status, isRefreshing, hasSeenProcessing]);
 
-  // Check if we should show the progress view based on scrape status or manual refresh state
-  const shouldShowProgress =
+  // Check if this is a refresh operation (either from current state or metadata)
+  const isRefreshOperation =
     isRefreshing ||
+    ((scrape.metadata as any)?.is_refresh_operation === true);
+
+  // Check if we should show the progress view based on scrape status or refresh state
+  const shouldShowProgress =
+    isRefreshOperation ||
     (scrape.status !== "completed" && scrape.status !== "failed");
 
   // Get recently processed pages for the progress view (only for initial agent creation)
   const recentPages = [...(scrape.scraped_pages || [])]
-    .sort(
-      (a, b) => {
-        // Use updated_at if available (for refreshed pages), otherwise created_at
-        const dateA = new Date(a.updated_at || a.created_at).getTime();
-        const dateB = new Date(b.updated_at || b.created_at).getTime();
-        return dateB - dateA;
-      }
-    )
+    .sort((a, b) => {
+      // Use updated_at if available (for refreshed pages), otherwise created_at
+      const dateA = new Date(a.updated_at || a.created_at).getTime();
+      const dateB = new Date(b.updated_at || b.created_at).getTime();
+      return dateB - dateA;
+    })
     .slice(0, 5);
 
   if (shouldShowProgress) {
@@ -617,10 +620,11 @@ export function ModernChatInterface({ scrape }: ModernChatInterfaceProps) {
         status={scrape.status || "processing"}
         step={scrape.current_step || "processing_pages"}
         pagesProcessed={scrape.pages_scraped || 0}
-        recentPages={recentPages}
+        recentPages={isRefreshOperation ? [] : recentPages}
         refreshingPages={
-          refreshingPages.length > 0 ? refreshingPages : undefined
+          isRefreshOperation ? [] : refreshingPages.length > 0 ? refreshingPages : undefined
         }
+        isRefreshOperation={isRefreshOperation}
       />
     );
   }

@@ -176,12 +176,19 @@ export async function POST(req: NextRequest) {
       const duration = ((Date.now() - startTime) / 1000).toFixed(1);
 
       // Force status to "completed" regardless of DEBUG mode
+      // Clear refresh operation metadata
+      const currentMetadata = (scrape.metadata as any) || {};
+      const updatedMetadata = { ...currentMetadata };
+      delete updatedMetadata.is_refresh_operation;
+      delete updatedMetadata.refresh_started_at;
+
       await updateScrape(
         scrapeId,
         {
           status: "completed",
           current_step: "completed",
           pages_scraped: totalPages,
+          metadata: updatedMetadata,
         },
         true // Always use supabaseAdmin to ensure update permissions
       );

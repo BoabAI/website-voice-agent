@@ -29,6 +29,7 @@ export function SimpleProgressView({
   errorMessage,
   onBack,
   refreshingPages,
+  isRefreshOperation = false,
 }: {
   domain: string;
   currentUrl: string;
@@ -39,6 +40,7 @@ export function SimpleProgressView({
   errorMessage?: string | null;
   onBack?: () => void;
   refreshingPages?: { title?: string; url: string; id: string }[];
+  isRefreshOperation?: boolean;
 }) {
   const isFailed = status === "failed";
 
@@ -82,14 +84,14 @@ export function SimpleProgressView({
 
           <div className="space-y-2">
             <h2 className="text-2xl md:text-3xl font-semibold text-gray-900 tracking-tight">
-              {refreshingPages && refreshingPages.length > 0
+              {(refreshingPages && refreshingPages.length > 0) || isRefreshOperation
                 ? "Refreshing Content"
                 : "Training Your Agent"}
             </h2>
             <p className="text-gray-500 text-lg">
               <span>
-                {refreshingPages && refreshingPages.length > 0
-                  ? `Updating ${refreshingPages.length} pages from `
+                {(refreshingPages && refreshingPages.length > 0) || isRefreshOperation
+                  ? `Updating pages from `
                   : "Learning from "}
                 <span className="text-gray-900 font-medium">{domain}</span>
               </span>
@@ -145,38 +147,47 @@ export function SimpleProgressView({
         </motion.div>
 
         {/* Refreshing Pages List (only if refreshing) */}
-        {refreshingPages && refreshingPages.length > 0 && (
+        {((refreshingPages && refreshingPages.length > 0) || isRefreshOperation) && (
           <div className="space-y-4 pt-4">
             <div className="flex items-center justify-between px-2">
               <div className="flex items-center gap-2">
                 <span className="flex h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
                 <p className="text-sm font-medium text-gray-600">
-                  Refreshing Pages ({refreshingPages.length})
+                  {refreshingPages && refreshingPages.length > 0
+                    ? `Refreshing Pages (${refreshingPages.length})`
+                    : "Refreshing Pages"}
                 </p>
               </div>
             </div>
 
-            <div className="space-y-2 relative max-h-[300px] overflow-y-auto pr-2">
-              {refreshingPages.map((page) => (
-                <div
-                  key={page.id}
-                  className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100 shadow-sm"
-                >
-                  <Loader2 className="w-4 h-4 text-blue-500 animate-spin shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-700 truncate">
-                      {page.title || "Untitled Page"}
-                    </p>
-                    <p className="text-xs text-gray-400 truncate font-mono mt-0.5">
-                      {new URL(page.url).pathname}
-                    </p>
+            {refreshingPages && refreshingPages.length > 0 ? (
+              <div className="space-y-2 relative max-h-[300px] overflow-y-auto pr-2">
+                {refreshingPages.map((page) => (
+                  <div
+                    key={page.id}
+                    className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100 shadow-sm"
+                  >
+                    <Loader2 className="w-4 h-4 text-blue-500 animate-spin shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-700 truncate">
+                        {page.title || "Untitled Page"}
+                      </p>
+                      <p className="text-xs text-gray-400 truncate font-mono mt-0.5">
+                        {new URL(page.url).pathname}
+                      </p>
+                    </div>
+                    <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full font-medium">
+                      Processing
+                    </span>
                   </div>
-                  <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full font-medium">
-                    Processing
-                  </span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500 text-sm">
+                <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
+                Processing page updates...
+              </div>
+            )}
           </div>
         )}
 

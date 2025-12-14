@@ -401,8 +401,15 @@ export async function refreshSelectedPages(
 
     console.log(`Refreshing ${pageIds.length} pages for scrape ${scrapeId}`);
 
-    // Update status to processing
-    await updateScrape(scrapeId, { status: "processing" });
+    // Update status to processing and mark as refresh operation
+    await updateScrape(scrapeId, {
+      status: "processing",
+      metadata: {
+        ...((scrape.metadata as any) || {}),
+        is_refresh_operation: true,
+        refresh_started_at: new Date().toISOString(),
+      }
+    });
 
     const client = supabaseAdmin || supabase;
     const processedPages: any[] = [];
