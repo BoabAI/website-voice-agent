@@ -31,6 +31,7 @@ export interface ScrapedPage {
   markdown: string | null;
   metadata: Record<string, any> | null;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface ScrapeWithPages extends Scrape {
