@@ -6,28 +6,31 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import { User, Sparkles } from "lucide-react";
-import { Message } from "ai";
+import { UIMessage } from "ai";
 
 // Helper to check if a message has renderable text content
-const hasTextContent = (m: Message) => {
-  if (m.content && m.content.trim().length > 0) return true;
-  if ((m as any).parts) {
-    return (m as any).parts.some(
-      (part: any) => part.type === "text" && part.text.trim().length > 0
+const hasTextContent = (m: UIMessage) => {
+  // Check parts array (new UIMessage structure)
+  if (m.parts) {
+    return m.parts.some(
+      (part) => part.type === "text" && part.text.trim().length > 0
     );
   }
+  // Fallback for legacy content property
+  const content = (m as any).content;
+  if (content && typeof content === "string" && content.trim().length > 0) return true;
   return false;
 };
 
 // Helper to check if a message is searching using the specific tool
-const isSearchingTool = (m: Message) => {
+const isSearchingTool = (m: UIMessage) => {
   return (m as any).toolInvocations?.some(
     (tool: any) => tool.toolName === "search_knowledge_base"
   );
 };
 
 interface ChatMessageProps {
-  message: Message;
+  message: UIMessage;
   index?: number;
 }
 
@@ -163,18 +166,18 @@ export const ChatMessage = memo(({ message: m, index = 0 }: ChatMessageProps) =>
                   ),
                 }}
               >
-                {(m as any).parts
-                  ? (m as any).parts
-                      .map((part: any) =>
+                {m.parts
+                  ? m.parts
+                      .map((part) =>
                         part.type === "text" ? part.text : ""
                       )
                       .join("")
-                  : typeof m.content === "string"
-                  ? m.content
+                  : typeof (m as any).content === "string"
+                  ? (m as any).content
                   : ""}
               </ReactMarkdown>
-              {!(m as any).parts &&
-                typeof m.content === "object" && (
+              {!m.parts &&
+                typeof (m as any).content === "object" && (
                   <span className="text-red-500 text-xs">
                     [Error: Invalid message format]
                   </span>
