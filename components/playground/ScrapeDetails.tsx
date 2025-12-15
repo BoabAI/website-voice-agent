@@ -21,18 +21,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { toast } from "sonner";
 import type { ScrapeWithPages, ScrapedPage } from "@/types/scrape";
-import { reScrapeSite, scrapMore } from "@/app/actions/scrape";
+import { reScrapeSite } from "@/app/actions/scrape";
 import { cn } from "@/lib/utils";
 import { ChatInterface } from "./ChatInterface";
+import { ScrapeMapDialog } from "./ScrapeMapDialog";
 
 interface ScrapeDetailsProps {
   scrape: ScrapeWithPages;
@@ -40,8 +34,7 @@ interface ScrapeDetailsProps {
 
 export function ScrapeDetails({ scrape }: ScrapeDetailsProps) {
   const [isReScraping, setIsReScraping] = useState(false);
-  const [isScrapingMore, setIsScrapingMore] = useState(false);
-  const [additionalPages, setAdditionalPages] = useState("10");
+  const [isScrapeMoreOpen, setIsScrapeMoreOpen] = useState(false);
   const [selectedPage, setSelectedPage] = useState<ScrapedPage | null>(null);
   const router = useRouter();
 
@@ -85,29 +78,6 @@ export function ScrapeDetails({ scrape }: ScrapeDetailsProps) {
     }
   };
 
-  const handleScrapMore = async () => {
-    setIsScrapingMore(true);
-    try {
-      const result = await scrapMore(scrape.id, Number(additionalPages));
-      if (result.success && result.scrapeId) {
-        toast.success("Scraping more pages started!", {
-          description: `Crawling ${additionalPages} additional pages...`,
-        });
-        router.push(`/playground/${result.scrapeId}`);
-        router.refresh();
-      } else {
-        toast.error("Failed to scrape more", {
-          description: result.error || "Unknown error",
-        });
-      }
-    } catch (error) {
-      toast.error("Something went wrong", {
-        description: error instanceof Error ? error.message : "Unknown error",
-      });
-    } finally {
-      setIsScrapingMore(false);
-    }
-  };
 
   const getStatusBadge = () => {
     switch (scrape.status) {
@@ -199,34 +169,16 @@ export function ScrapeDetails({ scrape }: ScrapeDetailsProps) {
               Scrape Again
             </Button>
 
-            {scrape.crawl_type === "full" && scrape.status === "completed" && (
-              <div className="flex gap-2">
-                <Select value={additionalPages} onValueChange={setAdditionalPages}>
-                  <SelectTrigger className="w-[100px] h-9 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="10">+10 pages</SelectItem>
-                    <SelectItem value="20">+20 pages</SelectItem>
-                    <SelectItem value="50">+50 pages</SelectItem>
-                  </SelectContent>
-                </Select>
-                
-                <Button
-                  onClick={handleScrapMore}
-                  disabled={isScrapingMore}
-                  variant="outline"
-                  size="sm"
-                  className="flex-1 justify-start gap-2"
-                >
-                  {isScrapingMore ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <PlusCircle className="w-4 h-4" />
-                  )}
-                  Scan More
-                </Button>
-              </div>
+            {scrape.status === "completed" && (
+              <Button
+                onClick={() => setIsScrapeMoreOpen(true)}
+                variant="outline"
+                size="sm"
+                className="w-full justify-start gap-2"
+              >
+                <PlusCircle className="w-4 h-4" />
+                Map & Scrape More
+              </Button>
             )}
           </div>
         </Card>
@@ -333,6 +285,14 @@ export function ScrapeDetails({ scrape }: ScrapeDetailsProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Map & Scrape More Dialog */}
+      <ScrapeMapDialog
+        scrapeId={scrape.id}
+        scrapeUrl={scrape.url}
+        open={isScrapeMoreOpen}
+        onOpenChange={setIsScrapeMoreOpen}
+      />
     </div>
   );
 }

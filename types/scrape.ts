@@ -83,6 +83,20 @@ export interface ScrapeFormData {
   pageLimit: number;
 }
 
+export interface MappedUrl {
+  id: string;
+  scrape_id: string;
+  url: string;
+  is_scraped: boolean;
+  created_at: string;
+}
+
+export interface GetMappablePagesResult {
+  pages: MappedUrl[];
+  total: number;
+  hasMore: boolean;
+}
+
 export interface StartScrapeResult {
   success: boolean;
   scrapeId?: string;

@@ -5,6 +5,7 @@ import {
   scrapeSingleUrl,
   batchScrapeUrls,
   asyncBatchScrape,
+  mapWebsite,
 } from "@/lib/firecrawl";
 import {
   insertScrape,
@@ -15,6 +16,11 @@ import {
   getAllScrapes,
   getUserScrapes,
   updateScrapedPage,
+  getMappedUrls,
+  getScrapedUrls,
+  insertMappedUrls,
+  markMappedUrlsAsScraped,
+  deleteScrape,
 } from "@/lib/db/scrapes";
 import {
   ensureAnonymousSession,
@@ -28,6 +34,7 @@ import type {
   ScrapeFormData,
   Scrape,
   ScrapeWithPages,
+  GetMappablePagesResult,
 } from "@/types/scrape";
 import { processEmbeddings } from "@/lib/processing";
 
@@ -150,16 +157,35 @@ export async function startScraping(
 
       console.log(`   ✓ Crawl started → waiting for webhooks`);
     } catch (crawlError) {
-      console.error(
-        `   ❌ Crawl failed:`,
-        crawlError instanceof Error ? crawlError.message : crawlError
-      );
+      const errorMessage =
+        crawlError instanceof Error ? crawlError.message : String(crawlError);
+      
+      // Handle credits issue specifically
+      if (
+        errorMessage.toLowerCase().includes("credits") ||
+        errorMessage.toLowerCase().includes("plan") ||
+        errorMessage.toLowerCase().includes("payment") || 
+        errorMessage.toLowerCase().includes("subscription")
+      ) {
+        console.error("🔥 CREDIT ISSUE DETECTED:", errorMessage);
+        
+        // Delete the scrape record so it doesn't show up in the list
+        try {
+          await deleteScrape(scrape.id);
+          console.log(`   🗑️ Deleted scrape ${scrape.id} due to credit issue`);
+        } catch (delError) {
+          console.error("   ❌ Failed to delete scrape after credit error:", delError);
+        }
+
+        // Throw generic error for the UI
+        throw new Error("Something went wrong, please try again later or contact support");
+      }
+
+      console.error(`   ❌ Crawl failed:`, errorMessage);
+
       await updateScrape(scrape.id, {
         status: "failed",
-        error_message:
-          crawlError instanceof Error
-            ? crawlError.message
-            : "Failed to start crawl",
+        error_message: errorMessage,
       });
       throw crawlError;
     }
@@ -321,7 +347,131 @@ export async function reScrapeSite(
 }
 
 /**
+ * Scrape more pages from an existing scrape (using map and select)
+ */
+export async function getMappablePagesAction(
+  scrapeId: string,
+  page: number = 1,
+  search?: string
+): Promise<{ success: boolean; data?: GetMappablePagesResult; error?: string }> {
+  try {
+    const userId = await ensureAnonymousSession();
+    const scrape = await getScrapeById(scrapeId);
+
+    if (!scrape) {
+      return { success: false, error: "Scrape not found" };
+    }
+
+    // 1. Check existing mapped pages in DB
+    const { data: existingMapped, count } = await getMappedUrls(
+      scrapeId,
+      page,
+      100, // Limit per page
+      search
+    );
+
+    // 2. If no pages mapped yet (and it's the first page/load), fetch from Firecrawl
+    if (page === 1 && existingMapped.length === 0 && !search) {
+      console.log(`Mapping website for scrape ${scrapeId}: ${scrape.url}`);
+      try {
+        const links = await mapWebsite(scrape.url, { limit: 2000 });
+        
+        // Filter out already scraped pages
+        const scrapedUrls = await getScrapedUrls(scrapeId);
+        const newLinks = links.filter((url) => !scrapedUrls.includes(url));
+
+        if (newLinks.length > 0) {
+          await insertMappedUrls(scrapeId, newLinks);
+          
+          // Re-fetch from DB
+          const result = await getMappedUrls(scrapeId, 1, 100, search);
+          return {
+            success: true,
+            data: {
+              pages: result.data,
+              total: result.count,
+              hasMore: result.count > 100,
+            },
+          };
+        }
+      } catch (mapError) {
+        console.error("Error mapping website:", mapError);
+        // Continue to return empty result if map fails
+      }
+    }
+
+    return {
+      success: true,
+      data: {
+        pages: existingMapped,
+        total: count,
+        hasMore: existingMapped.length === 100, // Roughly check if there might be more
+      },
+    };
+  } catch (error) {
+    console.error("Error getting mappable pages:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to get pages",
+    };
+  }
+}
+
+/**
+ * Scrape selected mapped pages
+ */
+export async function scrapeSelectedPagesAction(
+  scrapeId: string,
+  urls: string[]
+): Promise<{ success: boolean; error?: string; count?: number }> {
+  try {
+    const userId = await ensureAnonymousSession();
+    const scrape = await getScrapeById(scrapeId);
+
+    if (!scrape) {
+      return { success: false, error: "Scrape not found" };
+    }
+
+    if (urls.length === 0) {
+      return { success: true, count: 0 };
+    }
+
+    console.log(`Scraping ${urls.length} selected pages for ${scrapeId}`);
+
+    // Update status
+    await updateScrape(scrapeId, {
+      status: "processing",
+      metadata: {
+        ...scrape.metadata,
+        is_scraping_selected: true,
+        selected_pages_count: urls.length,
+      },
+    });
+
+    const baseUrl = await getBaseUrl();
+    const webhookUrl = `${baseUrl}/api/webhooks/firecrawl?scrapeId=${scrapeId}&type=batch`;
+
+    // Start async batch scrape
+    await asyncBatchScrape(urls, webhookUrl);
+
+    // Mark as scraped in mapped_urls table so they don't show up again
+    await markMappedUrlsAsScraped(scrapeId, urls);
+
+    return { success: true, count: urls.length };
+  } catch (error) {
+    console.error("Error scraping selected pages:", error);
+    // Restore status
+    await updateScrape(scrapeId, { status: "completed" });
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to scrape pages",
+    };
+  }
+}
+
+/**
  * Scrape more pages from an existing scrape
+ * @deprecated Use getMappablePagesAction and scrapeSelectedPagesAction instead
  */
 export async function scrapMore(
   scrapeId: string,

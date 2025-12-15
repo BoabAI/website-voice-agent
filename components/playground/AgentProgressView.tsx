@@ -293,14 +293,35 @@ export function AgentProgressView({ scrape }: AgentProgressViewProps) {
     scrape.url;
 
   // Get recently processed pages (last 5)
-  const recentPages = [...(scrape.scraped_pages || [])]
-    .sort((a, b) => {
-      // Use updated_at if available (for refreshed pages), otherwise created_at
+  // If it's a scraping selected pages operation, filter for only the new pages
+  const isScrapingSelected = (scrape.metadata as any)?.is_scraping_selected === true;
+  
+  let recentPages = [...(scrape.scraped_pages || [])];
+  
+  if (isScrapingSelected) {
+    // For selected pages scrape, we want to show pages created very recently (within the last few minutes)
+    // or we can track the start time of the operation in metadata
+    const selectedPagesCount = (scrape.metadata as any)?.selected_pages_count || 0;
+    
+    // Sort by created_at descending
+    recentPages.sort((a, b) => {
+      const dateA = new Date(a.created_at).getTime();
+      const dateB = new Date(b.created_at).getTime();
+      return dateB - dateA;
+    });
+    
+    // Only take the number of pages we just selected, or default to last 5 if count missing
+    // But ensure they are actually recent (e.g. created after the scrape was updated to processing)
+    // Since we don't have exact operation start time, we'll just show the N most recent pages
+    recentPages = recentPages.slice(0, selectedPagesCount > 0 ? selectedPagesCount : 5);
+  } else {
+    // Standard sort for full scrape
+    recentPages.sort((a, b) => {
       const dateA = new Date(a.updated_at || a.created_at).getTime();
       const dateB = new Date(b.updated_at || b.created_at).getTime();
       return dateB - dateA;
-    })
-    .slice(0, 5);
+    }).slice(0, 5);
+  }
 
   // Check if this is a refresh operation
   const isRefreshing = (scrape.metadata as any)?.is_refreshing === true;

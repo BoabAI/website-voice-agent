@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Prepare and insert pages
-      const scrapedPages = pages.map((page: any) => ({
+      const pagesToInsert = pages.map((page: any) => ({
         scrape_id: scrapeId,
         url: page.metadata?.sourceURL || page.url,
         title: page.metadata?.title || null,
@@ -152,12 +152,11 @@ export async function POST(req: NextRequest) {
         metadata: page.metadata || null,
       }));
 
-      await insertScrapedPages(scrapedPages, !DEBUG);
+      const insertedPages = await insertScrapedPages(pagesToInsert, !DEBUG);
 
       // Get updated page count
       const totalPages = await getScrapedPagesCount(scrapeId);
 
-      // Only update step for non-batch operations
       if (!isBatchOperation) {
         // Update step to generating_embeddings and update page count
         await updateScrape(
@@ -168,10 +167,19 @@ export async function POST(req: NextRequest) {
           },
           !DEBUG
         );
+      } else {
+        // For batch operations, just update the page count without changing step
+        await updateScrape(
+          scrapeId,
+          {
+            pages_scraped: totalPages,
+          },
+          !DEBUG
+        );
       }
 
-      // Generate embeddings
-      const result = await processEmbeddings(scrapeId, scrapedPages, !DEBUG);
+      // Generate embeddings using the inserted pages (which have IDs)
+      const result = await processEmbeddings(scrapeId, insertedPages, !DEBUG);
 
       console.log(
         `📄 [${sid}] +1 page: ${displayUrl} (${result.chunksProcessed} vectors)`

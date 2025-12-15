@@ -24,7 +24,7 @@ export async function searchKnowledgeBase(
     }
 
     // 1. Convert the user query into a vector
-    const queryEmbedding = await generateEmbeddings(query);
+    const queryEmbeddingResult = await generateEmbeddings(query);
 
     // 2. Search Supabase using the vector
     // Note: The order of parameters in the RPC call doesn't strictly matter if we use named parameters,
@@ -33,7 +33,7 @@ export async function searchKnowledgeBase(
       filter_scrape_id: scrapeId,
       match_count: topK,
       match_threshold: 0.3,
-      query_embedding: queryEmbedding,
+      query_embedding: queryEmbeddingResult.data,
     });
 
     if (error) {

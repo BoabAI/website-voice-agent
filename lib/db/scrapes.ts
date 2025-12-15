@@ -6,6 +6,7 @@ import type {
   CrawlType,
   ScrapeStatus,
   ScrapeStep,
+  MappedUrl,
 } from "@/types/scrape";
 
 /**
@@ -329,4 +330,107 @@ export async function getScrapeStats(scrapeId: string): Promise<{
     completedPages: scrape.pages_scraped,
     status: scrape.status,
   };
+}
+
+/**
+ * Insert mapped URLs in batch
+ */
+export async function insertMappedUrls(
+  scrapeId: string,
+  urls: string[]
+): Promise<void> {
+  if (urls.length === 0) return;
+
+  const client = supabaseAdmin || supabase;
+
+  // Insert URLs, ignoring duplicates due to the unique constraint on (scrape_id, url)
+  // Since we can't easily do ON CONFLICT DO NOTHING with simple insert, we can use upsert with ignoreDuplicates
+  const { error } = await client.from("mapped_urls").upsert(
+    urls.map((url) => ({
+      scrape_id: scrapeId,
+      url,
+    })),
+    { onConflict: "scrape_id,url", ignoreDuplicates: true }
+  );
+
+  if (error) {
+    console.error("[DB] Insert mapped urls error:", error);
+    throw new Error(`Failed to insert mapped urls: ${error.message}`);
+  }
+}
+
+/**
+ * Get mapped URLs with pagination and search
+ */
+export async function getMappedUrls(
+  scrapeId: string,
+  page: number = 1,
+  limit: number = 100,
+  search?: string
+): Promise<{ data: MappedUrl[]; count: number }> {
+  const client = supabaseAdmin || supabase;
+  
+  let query = client
+    .from("mapped_urls")
+    .select("*", { count: "exact" })
+    .eq("scrape_id", scrapeId)
+    .eq("is_scraped", false);
+
+  if (search) {
+    query = query.ilike("url", `%${search}%`);
+  }
+
+  const start = (page - 1) * limit;
+  const end = start + limit - 1;
+
+  const { data, count, error } = await query
+    .order("url", { ascending: true })
+    .range(start, end);
+
+  if (error) {
+    console.error("[DB] Get mapped urls error:", error);
+    throw new Error(`Failed to get mapped urls: ${error.message}`);
+  }
+
+  return { data: data || [], count: count || 0 };
+}
+
+/**
+ * Get all currently scraped URLs for a scrape
+ */
+export async function getScrapedUrls(scrapeId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("scraped_pages")
+    .select("url")
+    .eq("scrape_id", scrapeId);
+
+  if (error) {
+    console.error("[DB] Get scraped urls error:", error);
+    throw new Error(`Failed to get scraped urls: ${error.message}`);
+  }
+
+  return data ? data.map((p) => p.url) : [];
+}
+
+/**
+ * Mark mapped URLs as scraped
+ */
+export async function markMappedUrlsAsScraped(
+  scrapeId: string,
+  urls: string[]
+): Promise<void> {
+  if (urls.length === 0) return;
+
+  const client = supabaseAdmin || supabase;
+
+  const { error } = await client
+    .from("mapped_urls")
+    .update({ is_scraped: true })
+    .eq("scrape_id", scrapeId)
+    .in("url", urls);
+
+  if (error) {
+    console.error("[DB] Mark mapped urls as scraped error:", error);
+    throw new Error(`Failed to update mapped urls: ${error.message}`);
+  }
 }

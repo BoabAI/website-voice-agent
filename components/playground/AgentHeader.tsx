@@ -5,12 +5,10 @@ import { useRouter } from "next/navigation";
 import {
   RefreshCw,
   PlusCircle,
-  Loader2,
   Globe,
   Calendar,
   FileText,
   MoreVertical,
-  Settings,
   ExternalLink,
   Trash2,
   List,
@@ -30,21 +28,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { toast } from "sonner";
 import type { ScrapeWithPages } from "@/types/scrape";
-import { scrapMore } from "@/app/actions/scrape";
 import { formatDistanceToNow } from "date-fns";
-import { cn } from "@/lib/utils";
 import { ScrapeRefreshDialog } from "./ScrapeRefreshDialog";
+import { ScrapeMapDialog } from "./ScrapeMapDialog";
 
 interface AgentHeaderProps {
   scrape: ScrapeWithPages;
@@ -56,37 +44,10 @@ interface AgentHeaderProps {
 }
 
 export function AgentHeader({ scrape, onClearChat, onRefreshStart }: AgentHeaderProps) {
-  const [isScrapingMore, setIsScrapingMore] = useState(false);
-  const [additionalPages, setAdditionalPages] = useState("10");
   const [isScrapeMoreOpen, setIsScrapeMoreOpen] = useState(false);
   const [showPagesDialog, setShowPagesDialog] = useState(false);
   const [showRefreshDialog, setShowRefreshDialog] = useState(false);
   const router = useRouter();
-
-  const handleScrapMore = async () => {
-    setIsScrapingMore(true);
-    try {
-      const result = await scrapMore(scrape.id, Number(additionalPages));
-      if (result.success && result.scrapeId) {
-        toast.success("Scraping more pages started!", {
-          description: `Crawling ${additionalPages} additional pages...`,
-        });
-        router.push(`/playground/${result.scrapeId}`);
-        router.refresh();
-        setIsScrapeMoreOpen(false);
-      } else {
-        toast.error("Failed to scrape more", {
-          description: result.error || "Unknown error",
-        });
-      }
-    } catch (error) {
-      toast.error("Something went wrong", {
-        description: error instanceof Error ? error.message : "Unknown error",
-      });
-    } finally {
-      setIsScrapingMore(false);
-    }
-  };
 
   const hostname = new URL(scrape.url).hostname;
 
@@ -150,59 +111,13 @@ export function AgentHeader({ scrape, onClearChat, onRefreshStart }: AgentHeader
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Refresh Pages
               </DropdownMenuItem>
-              <Dialog
-                open={isScrapeMoreOpen}
-                onOpenChange={setIsScrapeMoreOpen}
+              <DropdownMenuItem
+                onClick={() => setIsScrapeMoreOpen(true)}
+                className="cursor-pointer"
               >
-                <DialogTrigger asChild>
-                  <DropdownMenuItem
-                    onSelect={(e) => e.preventDefault()}
-                    disabled={true}
-                    className="cursor-not-allowed opacity-50"
-                  >
-                    <PlusCircle className="w-4 h-4 mr-2" />
-                    Scrape More Pages
-                  </DropdownMenuItem>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Scrape More Pages</DialogTitle>
-                    <DialogDescription>
-                      Choose how many additional pages you want to scrape from{" "}
-                      {hostname}.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-4 py-4">
-                    <div className="flex items-center gap-4">
-                      <label className="text-sm font-medium">
-                        Pages to add:
-                      </label>
-                      <Select
-                        value={additionalPages}
-                        onValueChange={setAdditionalPages}
-                      >
-                        <SelectTrigger className="w-[180px]">
-                          <SelectValue placeholder="Select amount" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="10">10 pages</SelectItem>
-                          <SelectItem value="20">20 pages</SelectItem>
-                          <SelectItem value="50">50 pages</SelectItem>
-                          <SelectItem value="100">100 pages</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button onClick={handleScrapMore} disabled={isScrapingMore}>
-                      {isScrapingMore && (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      )}
-                      Start Scraping
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                <PlusCircle className="w-4 h-4 mr-2" />
+                Map & Scrape More
+              </DropdownMenuItem>
               {onClearChat && (
                 <>
                   <DropdownMenuSeparator />
@@ -226,6 +141,14 @@ export function AgentHeader({ scrape, onClearChat, onRefreshStart }: AgentHeader
         open={showRefreshDialog}
         onOpenChange={setShowRefreshDialog}
         onRefreshStart={onRefreshStart}
+      />
+
+      {/* Map & Scrape Dialog */}
+      <ScrapeMapDialog
+        scrapeId={scrape.id}
+        scrapeUrl={scrape.url}
+        open={isScrapeMoreOpen}
+        onOpenChange={setIsScrapeMoreOpen}
       />
 
       {/* Crawled Pages Dialog */}

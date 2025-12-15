@@ -120,12 +120,16 @@ export async function startCrawlJob(
 
     return crawlResponse.id;
   } catch (error) {
-    console.error("[Firecrawl] Start crawl error:", error);
-    throw new Error(
-      `Failed to start crawl: ${
-        error instanceof Error ? error.message : "Unknown error"
-      }`
-    );
+    // Only log full error if it's not a credit issue (handled upstream)
+    const errorMsg = error instanceof Error ? error.message : "Unknown error";
+    if (
+      !errorMsg.toLowerCase().includes("credits") &&
+      !errorMsg.toLowerCase().includes("plan")
+    ) {
+      console.error("[Firecrawl] Start crawl error:", error);
+    }
+
+    throw new Error(`Failed to start crawl: ${errorMsg}`);
   }
 }
 
@@ -212,11 +216,25 @@ export async function crawlWebsite(
 /**
  * Map a website to get all available URLs (useful for showing how many pages can be scraped)
  */
-export async function mapWebsite(url: string): Promise<string[]> {
+export async function mapWebsite(
+  url: string,
+  options?: { limit?: number; search?: string }
+): Promise<string[]> {
   try {
     console.log("[Firecrawl] Mapping website:", url);
 
-    const result = await firecrawl.map(url);
+    const mapOptions: any = {
+      limit: options?.limit || 1000,
+    };
+
+    // Only include search if it's provided and not empty
+    if (options?.search && options.search.trim()) {
+      mapOptions.search = options.search;
+    }
+
+    console.log("[Firecrawl] Map options:", JSON.stringify(mapOptions));
+
+    const result = await firecrawl.map(url, mapOptions);
 
     console.log("[Firecrawl] Map result type:", typeof result);
     console.log("[Firecrawl] Map result keys:", Object.keys(result || {}));
@@ -229,6 +247,7 @@ export async function mapWebsite(url: string): Promise<string[]> {
     return links;
   } catch (error) {
     console.error("[Firecrawl] Map error:", error);
+    console.error("[Firecrawl] Error details:", JSON.stringify(error, null, 2));
     throw new Error(
       `Failed to map website: ${
         error instanceof Error ? error.message : "Unknown error"

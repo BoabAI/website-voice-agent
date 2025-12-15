@@ -28,12 +28,23 @@ CREATE TABLE IF NOT EXISTS scraped_pages (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Create mapped_urls table
+CREATE TABLE IF NOT EXISTS mapped_urls (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  scrape_id UUID NOT NULL REFERENCES scrapes(id) ON DELETE CASCADE,
+  url TEXT NOT NULL,
+  is_scraped BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(scrape_id, url)
+);
+
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_scrapes_url ON scrapes(url);
 CREATE INDEX IF NOT EXISTS idx_scrapes_user_id ON scrapes(user_id);
 CREATE INDEX IF NOT EXISTS idx_scrapes_status ON scrapes(status);
 CREATE INDEX IF NOT EXISTS idx_scrapes_created_at ON scrapes(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_scraped_pages_scrape_id ON scraped_pages(scrape_id);
+CREATE INDEX IF NOT EXISTS idx_mapped_urls_scrape_id ON mapped_urls(scrape_id);
 
 -- Create updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -54,6 +65,7 @@ CREATE TRIGGER update_scrapes_updated_at
 -- Enable Row Level Security (RLS)
 ALTER TABLE scrapes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE scraped_pages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mapped_urls ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for scrapes table
 -- Allow all users to read all scrapes (global + user-specific visibility)
@@ -121,6 +133,48 @@ CREATE POLICY "Allow delete scraped pages for own scrapes"
     )
   );
 
+-- RLS Policies for mapped_urls table
+-- Allow read access to all mapped urls
+CREATE POLICY "Allow read access to all mapped urls"
+  ON mapped_urls FOR SELECT
+  USING (true);
+
+-- Allow insert if user owns the parent scrape
+CREATE POLICY "Allow insert mapped urls for own scrapes"
+  ON mapped_urls FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM scrapes
+      WHERE scrapes.id = scrape_id
+      AND scrapes.user_id = auth.uid()
+    )
+  );
+
+-- Allow update if user owns the parent scrape
+CREATE POLICY "Allow update mapped urls for own scrapes"
+  ON mapped_urls FOR UPDATE
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM scrapes
+      WHERE scrapes.id = scrape_id
+      AND scrapes.user_id = auth.uid()
+    )
+  );
+
+-- Allow delete if user owns the parent scrape
+CREATE POLICY "Allow delete mapped urls for own scrapes"
+  ON mapped_urls FOR DELETE
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM scrapes
+      WHERE scrapes.id = scrape_id
+      AND scrapes.user_id = auth.uid()
+    )
+  );
+
 -- Create a view for scrapes with page counts
 CREATE OR REPLACE VIEW scrapes_with_counts AS
 SELECT 
@@ -129,4 +183,3 @@ SELECT
 FROM scrapes s
 LEFT JOIN scraped_pages sp ON s.id = sp.scrape_id
 GROUP BY s.id;
-
