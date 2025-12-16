@@ -97,6 +97,49 @@ async function getBaseUrl() {
 }
 
 /**
+ * Verify URL exists and is reachable
+ */
+async function verifyUrl(url: string) {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+
+    const response = await fetch(url, {
+      method: "HEAD",
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; WebVoiceAgent/1.0; +http://localhost:3000)",
+      },
+    });
+    
+    clearTimeout(timeoutId);
+    
+    // If we get a response (even 4xx/5xx), the domain exists and is reachable.
+    // fetch only throws on network errors (DNS, connection refused, etc)
+    return true;
+  } catch (error) {
+    // If HEAD fails, try GET as fallback (some servers block HEAD)
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      await fetch(url, {
+        method: "GET",
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; WebVoiceAgent/1.0; +http://localhost:3000)",
+        },
+      });
+      
+      clearTimeout(timeoutId);
+      return true;
+    } catch (getError) {
+      throw new Error(`Cannot reach website. Please check if the URL is correct and accessible.`);
+    }
+  }
+}
+
+/**
  * Start a new scraping job
  */
 export async function startScraping(
@@ -112,6 +155,9 @@ export async function startScraping(
 
   try {
     const userId = await ensureAnonymousSession();
+
+    // Verify URL before creating anything
+    await verifyUrl(data.url);
 
     // Check if URL already exists
     const existing = await checkExistingScrape(data.url);

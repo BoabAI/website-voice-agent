@@ -6,7 +6,6 @@ import {
   RefreshCw,
   PlusCircle,
   Globe,
-  Calendar,
   FileText,
   MoreVertical,
   ExternalLink,
@@ -30,7 +29,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { ScrapeWithPages } from "@/types/scrape";
-import { formatDistanceToNow } from "date-fns";
 import { ScrapeRefreshDialog } from "./ScrapeRefreshDialog";
 import { ScrapeMapDialog } from "./ScrapeMapDialog";
 
@@ -71,12 +69,6 @@ export function AgentHeader({ scrape, onClearChat, onRefreshStart }: AgentHeader
               </a>
             </div>
             <div className="flex items-center gap-3 text-xs text-gray-500">
-              <span className="flex items-center gap-1">
-                <Calendar className="w-3 h-3" />
-                {formatDistanceToNow(new Date(scrape.created_at), {
-                  addSuffix: true,
-                })}
-              </span>
               <button
                 onClick={() => setShowPagesDialog(true)}
                 className="flex items-center gap-1 hover:text-blue-600 hover:underline transition-colors cursor-pointer"

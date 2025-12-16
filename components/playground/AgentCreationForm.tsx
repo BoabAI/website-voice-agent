@@ -101,6 +101,16 @@ export function AgentCreationForm() {
     }
   }
 
+  function onError() {
+    // Show toast notification for validation errors
+    const urlError = form.formState.errors.url;
+    if (urlError) {
+      toast.error("Invalid URL format", {
+        description: urlError.message,
+      });
+    }
+  }
+
   return (
     <div className="flex flex-col items-center justify-start md:justify-center min-h-full bg-white p-4 md:p-8 py-12 md:py-8">
       <motion.div
@@ -133,7 +143,7 @@ export function AgentCreationForm() {
         <div className="w-full relative">
           <Form {...form}>
             <form
-              onSubmit={form.handleSubmit(onSubmit)}
+              onSubmit={form.handleSubmit(onSubmit, onError)}
               className="relative z-10"
             >
               <FormField
@@ -282,6 +292,7 @@ export function AgentCreationForm() {
                         </div>
                       </div>
                     </FormControl>
+                    <FormMessage />
                   </FormItem>
                 )}
               />

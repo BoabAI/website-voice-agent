@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,14 +10,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, RefreshCw, Globe, CheckCircle2 } from "lucide-react";
+import { Loader2, RefreshCw, Globe } from "lucide-react";
 import { toast } from "sonner";
 import { refreshSelectedPages } from "@/app/actions/scrape";
 import type { ScrapeWithPages } from "@/types/scrape";
 import { useRouter } from "next/navigation";
-import { SimpleProgressView } from "./AgentProgressView";
 
 interface ScrapeRefreshDialogProps {
   scrape: ScrapeWithPages;
@@ -38,6 +36,17 @@ export function ScrapeRefreshDialog({
   const [selectedPages, setSelectedPages] = useState<string[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const router = useRouter();
+
+  // Reset selection when dialog closes
+  useEffect(() => {
+    if (!open) {
+      const timer = setTimeout(() => {
+        setSelectedPages([]);
+        setIsRefreshing(false);
+      }, 300); // Wait for animation to finish
+      return () => clearTimeout(timer);
+    }
+  }, [open]);
 
   const handleSelectAll = () => {
     if (selectedPages.length === scrape.scraped_pages.length) {
@@ -97,8 +106,6 @@ export function ScrapeRefreshDialog({
     onOpenChange(false);
   };
 
-  // Removed internal loading overlay since parent handles it now
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
@@ -122,7 +129,8 @@ export function ScrapeRefreshDialog({
           </Button>
         </div>
 
-        <ScrollArea className="flex-1 min-h-[300px] pr-4">
+        {/* Simple overflow-y-auto instead of ScrollArea */}
+        <div className="flex-1 min-h-[300px] overflow-y-auto pr-4">
           <div className="space-y-2 py-2">
             {scrape.scraped_pages.map((page) => (
               <div
@@ -133,21 +141,26 @@ export function ScrapeRefreshDialog({
                 <Checkbox
                   checked={selectedPages.includes(page.id)}
                   onCheckedChange={() => handleTogglePage(page.id)}
-                  className="mt-1"
+                  className="mt-1 flex-shrink-0"
                 />
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-medium leading-none mb-1.5 truncate">
-                    {page.title || "Untitled Page"}
-                  </h4>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Globe className="w-3 h-3" />
-                    <span className="truncate max-w-[300px]">{page.url}</span>
+                {/* Horizontally scrollable content area */}
+                <div 
+                  className="flex-1 min-w-0 overflow-x-auto scrollbar-thin"
+                >
+                  <div className="w-max pr-4">
+                    <h4 className="text-sm font-medium leading-none mb-1.5 whitespace-nowrap">
+                      {page.title || "Untitled Page"}
+                    </h4>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground whitespace-nowrap">
+                      <Globe className="w-3 h-3 flex-shrink-0" />
+                      <span>{page.url}</span>
+                    </div>
                   </div>
                 </div>
               </div>
             ))}
           </div>
-        </ScrollArea>
+        </div>
 
         <DialogFooter className="border-t pt-4">
           <Button
